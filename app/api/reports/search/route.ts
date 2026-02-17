@@ -1,5 +1,7 @@
 import { NextRequest } from 'next/server';
-import { buildSessionReport, getLogsBetween } from '@/lib/airtable/logs';
+import { auth } from '@/lib/auth';
+import { hasDatabaseUrl } from '@/lib/server-env';
+import { fetchSessionReportRows } from '@/src/lib/sessions-reports';
 
 export const runtime = 'nodejs';
 
@@ -12,38 +14,20 @@ type SearchParams = {
 };
 
 function parseIntParam(value: string | null, name: string): number {
-  if (!value) {
-    throw new Error(`${name} is required`);
-  }
+  if (!value) throw new Error(`${name} is required`);
   const parsed = Number.parseInt(value, 10);
-  if (!Number.isInteger(parsed)) {
-    throw new Error(`${name} must be an integer`);
-  }
+  if (!Number.isInteger(parsed)) throw new Error(`${name} must be an integer`);
   return parsed;
 }
 
-function resolveMonthRange(year: number, month: number) {
-  const startUtc = new Date(Date.UTC(year, month - 1, 1, -9, 0, 0));
-  const nextMonth = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
-  const endUtc = new Date(Date.UTC(nextMonth.year, nextMonth.month - 1, 1, -9, 0, 0));
-  return { from: startUtc, to: endUtc };
-}
-
 function normalizeQuery(value: string | null | undefined): string | undefined {
-  if (!value) {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
 }
 
-function matchesFilter(value: string | null, query?: string): boolean {
-  if (!query) {
-    return true;
-  }
-  if (!value) {
-    return false;
-  }
+function includesFilter(value: string | null | undefined, query?: string): boolean {
+  if (!query) return true;
+  if (!value) return false;
   return value.toLocaleLowerCase('ja').includes(query.toLocaleLowerCase('ja'));
 }
 
@@ -51,9 +35,7 @@ function parseSearchParams(request: NextRequest): SearchParams {
   const url = request.nextUrl;
   const year = parseIntParam(url.searchParams.get('year'), 'year');
   const month = parseIntParam(url.searchParams.get('month'), 'month');
-  if (month < 1 || month > 12) {
-    throw new Error('month must be between 1 and 12');
-  }
+  if (month < 1 || month > 12) throw new Error('month must be between 1 and 12');
   return {
     year,
     month,
@@ -64,6 +46,14 @@ function parseSearchParams(request: NextRequest): SearchParams {
 }
 
 export async function GET(request: NextRequest): Promise<Response> {
+  const session = await auth();
+  if (!session?.user) {
+    return Response.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  }
+  if (!hasDatabaseUrl()) {
+    return Response.json({ ok: false, error: 'DB env missing' }, { status: 500 });
+  }
+
   let params: SearchParams;
   try {
     params = parseSearchParams(request);
@@ -73,31 +63,20 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 
   try {
-    const range = resolveMonthRange(params.year, params.month);
-    const logs = await getLogsBetween(range);
-    const rows = buildSessionReport(logs).filter((row) => {
-      if (!matchesFilter(row.siteName ?? null, params.sitename)) {
-        return false;
-      }
-      if (!matchesFilter(row.userName, params.username)) {
-        return false;
-      }
-      const machineLabel = row.machineName ?? row.machineId ?? null;
-      if (!matchesFilter(machineLabel, params.machinename)) {
-        return false;
-      }
-      return true;
-    });
-
-    const records = rows.map((row) => ({
-      id: row.id,
-      date: row.date,
-      username: row.userName,
-      sitename: row.siteName ?? '',
-      machinename: row.machineName ?? row.machineId ?? '',
-      workdescription: row.workDescription ?? '',
-      hours: row.hours,
-    }));
+    const rows = await fetchSessionReportRows({ year: params.year, month: params.month });
+    const records = rows
+      .filter((row) => includesFilter(row.siteName, params.sitename))
+      .filter((row) => includesFilter(row.userName, params.username))
+      .filter((row) => includesFilter(row.machineName ?? row.machineId, params.machinename))
+      .map((row) => ({
+        id: row.id,
+        date: row.date,
+        username: row.userName,
+        sitename: row.siteName ?? '',
+        machinename: row.machineName ?? row.machineId ?? '',
+        workdescription: row.workDescription ?? '',
+        hours: row.hours ?? 0,
+      }));
 
     return Response.json({ ok: true, records });
   } catch (error) {

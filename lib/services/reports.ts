@@ -1,7 +1,7 @@
-import { sitesTable, withRetry } from '@/lib/airtable';
 import type { ReportRow } from '@/lib/reports/pair';
 import { fetchSessionReportRows, type SessionReportRow } from '@/src/lib/sessions-reports';
 import { normalizeDailyMinutes } from '@/src/lib/timecalc';
+import { query } from '@/lib/db';
 import { isBreakPolicyEnabled, resolveBreakPolicy } from '@/lib/policies/breakDeduction';
 
 type SortKey = 'year' | 'month' | 'day' | 'siteName';
@@ -133,70 +133,37 @@ function formatTimestampJst(
   return formatTimestampJstFromMs(parsed);
 }
 
-function pickFirstStringField(fields: Record<string, unknown>, keys: string[]): string | null {
-  for (const key of keys) {
-    const value = fields[key];
-    if (typeof value === 'string') {
-      const trimmed = value.trim();
-      if (trimmed) {
-        return trimmed;
-      }
-    }
-  }
-  return null;
-}
-
-function chunkArray<T>(values: T[], size: number): T[][] {
-  if (size <= 0) {
-    return [values];
-  }
-  const chunks: T[][] = [];
-  for (let index = 0; index < values.length; index += size) {
-    chunks.push(values.slice(index, index + size));
-  }
-  return chunks;
-}
+type SiteRow = { id: string | null; client_name: string | null };
 
 async function fetchSiteClientNames(sessions: SessionReportRow[]): Promise<Map<string, string>> {
-  const siteIds = new Set<string>();
-  for (const session of sessions) {
-    const directClient = normalizeLookupText((session as Record<string, unknown>).clientName);
-    if (directClient) {
-      continue;
-    }
-    if (session.siteRecordId) {
-      siteIds.add(session.siteRecordId);
-    }
-  }
+  const siteIds = Array.from(
+    new Set(
+      sessions
+        .map((session) => session.siteRecordId)
+        .filter((id): id is string => Boolean(id && id.length > 0)),
+    ),
+  );
 
-  if (siteIds.size === 0) {
-    return new Map();
-  }
+  if (siteIds.length === 0) return new Map();
 
-  const result = new Map<string, string>();
-  const idList = Array.from(siteIds);
-  const chunks = chunkArray(idList, 10);
+  const result = await query<SiteRow>(
+    `
+      SELECT
+        COALESCE(to_jsonb(s)->>'id', to_jsonb(s)->>'siteId') AS id,
+        COALESCE(to_jsonb(s)->>'clientName', to_jsonb(s)->>'client') AS client_name
+      FROM sites s
+      WHERE COALESCE(to_jsonb(s)->>'id', to_jsonb(s)->>'siteId', '') = ANY($1::text[])
+    `,
+    [siteIds],
+  );
 
-  for (const chunk of chunks) {
-    if (chunk.length === 0) {
-      continue;
-    }
-    const conditions = chunk.map((id) => `RECORD_ID()='${id}'`).join(',');
-    const formula = chunk.length === 1 ? conditions : `OR(${conditions})`;
-    const records = await withRetry(() =>
-      sitesTable.select({ fields: ['clientName', 'client'], filterByFormula: formula }).all(),
-    );
-    for (const record of records) {
-      const fields = record.fields as Record<string, unknown>;
-      const client =
-        pickFirstStringField(fields, ['clientName', 'client', 'client name', 'client_name']) ?? null;
-      if (client) {
-        result.set(record.id, client);
-      }
+  const map = new Map<string, string>();
+  for (const row of result.rows) {
+    if (row.id && row.client_name) {
+      map.set(row.id, row.client_name);
     }
   }
-
-  return result;
+  return map;
 }
 
 export async function getReportRowsByUserName(

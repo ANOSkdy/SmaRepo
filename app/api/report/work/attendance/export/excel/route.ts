@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 import ExcelJS from 'exceljs';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
+import { hasDatabaseUrl } from '@/lib/server-env';
 import {
   BASE_HOURS_PER_DAY,
   SUMMARY_COLUMNS,
@@ -15,15 +16,6 @@ import {
   SiteNotFoundError,
   getMonthlyAttendance,
 } from '@/lib/report/work/attendance/getMonthlyAttendance';
-import { AirtableError } from '@/src/lib/airtable/client';
-
-function parseAirtableErrorDetails(error: AirtableError): unknown {
-  try {
-    return JSON.parse(error.message);
-  } catch {
-    return error.message;
-  }
-}
 
 function parseNumberParam(value: string | null, label: string): number | null {
   if (value == null || value.trim().length === 0) {
@@ -41,6 +33,10 @@ function buildDayHeaderLabel(day: { day: number; weekdayJa: string }): string {
 }
 
 export async function GET(req: NextRequest) {
+  if (!hasDatabaseUrl()) {
+    return NextResponse.json({ ok: false, error: 'DB env missing' }, { status: 500 });
+  }
+
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
@@ -187,17 +183,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(
         { message: 'siteId not found', details: { siteId: error.siteId } },
         { status: 404 },
-      );
-    }
-    if (error instanceof AirtableError && error.status === 422) {
-      const details = parseAirtableErrorDetails(error);
-      console.error('[/api/report/work/attendance/export/excel] airtable error', {
-        status: error.status,
-        details,
-      });
-      return NextResponse.json(
-        { message: 'Airtable request failed', details },
-        { status: 422 },
       );
     }
     console.error('[/api/report/work/attendance/export/excel] error', error);

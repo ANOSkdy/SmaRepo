@@ -1,18 +1,13 @@
+export const runtime = 'nodejs';
+
 import { NextResponse } from 'next/server';
 import {
   InvalidMonthError,
   SiteNotFoundError,
   getMonthlyAttendance,
 } from '@/lib/report/work/attendance/getMonthlyAttendance';
-import { AirtableError } from '@/src/lib/airtable/client';
-
-function parseAirtableErrorDetails(error: AirtableError): unknown {
-  try {
-    return JSON.parse(error.message);
-  } catch {
-    return error.message;
-  }
-}
+import { auth } from '@/lib/auth';
+import { hasDatabaseUrl } from '@/lib/server-env';
 
 function parseNumberParam(value: string | null, label: string): number | null {
   if (value == null || value.trim().length === 0) {
@@ -26,6 +21,14 @@ function parseNumberParam(value: string | null, label: string): number | null {
 }
 
 export async function GET(req: Request) {
+  if (!hasDatabaseUrl()) {
+    return NextResponse.json({ ok: false, error: 'DB env missing' }, { status: 500 });
+  }
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(req.url);
   const monthParam = searchParams.get('month');
   const siteId = searchParams.get('siteId') || undefined;
@@ -63,17 +66,6 @@ export async function GET(req: Request) {
       return NextResponse.json(
         { message: 'siteId not found', details: { siteId: error.siteId } },
         { status: 404 },
-      );
-    }
-    if (error instanceof AirtableError && error.status === 422) {
-      const details = parseAirtableErrorDetails(error);
-      console.error('[/api/report/work/attendance] airtable error', {
-        status: error.status,
-        details,
-      });
-      return NextResponse.json(
-        { message: 'Airtable request failed', details },
-        { status: 422 },
       );
     }
     console.error('[/api/report/work/attendance] error', error);

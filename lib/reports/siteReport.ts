@@ -1,9 +1,8 @@
-import { sitesTable } from '@/lib/airtable';
 import { compareMachineId } from '@/lib/utils/sort';
 import { fetchSessionReportRows, type SessionReportRow } from '@/src/lib/sessions-reports';
 import { applyTimeCalcV2FromMinutes, hoursFromMinutes } from '@/src/lib/timecalc';
 import { isBreakPolicyEnabled, resolveBreakPolicy, type BreakPolicyResult } from '@/lib/policies/breakDeduction';
-import type { SiteFields } from '@/types';
+import { query } from '@/lib/db';
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土'] as const;
 
@@ -105,12 +104,19 @@ export async function buildSiteReport({
   let siteName = '';
   let client = '';
   try {
-    const siteRecord = await sitesTable.find(siteId);
-    const fields = siteRecord?.fields as SiteFields | undefined;
-    if (fields) {
-      siteName = fields.name ?? '';
-      client = fields.client ?? '';
-    }
+    const siteRes = await query<{ name: string | null; client: string | null }>(
+      `
+        SELECT
+          COALESCE(to_jsonb(s)->>'name', to_jsonb(s)->>'siteName') AS name,
+          COALESCE(to_jsonb(s)->>'client', to_jsonb(s)->>'clientName') AS client
+        FROM sites s
+        WHERE COALESCE(to_jsonb(s)->>'id', to_jsonb(s)->>'siteId', '') = $1
+        LIMIT 1
+      `,
+      [siteId],
+    );
+    siteName = siteRes.rows[0]?.name ?? '';
+    client = siteRes.rows[0]?.client ?? '';
   } catch (error) {
     console.warn('[reports][sites] failed to load site', error);
   }

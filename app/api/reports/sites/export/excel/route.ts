@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 import ExcelJS from 'exceljs';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
+import { hasDatabaseUrl } from '@/lib/server-env';
 import { buildSiteReport, type ReportColumn } from '@/lib/reports/siteReport';
 
 const MIN_DYNAMIC_COLUMNS = 8;
@@ -57,6 +58,10 @@ function formatMachineLabel(column: ReportColumn) {
 }
 
 export async function GET(req: NextRequest) {
+  if (!hasDatabaseUrl()) {
+    return NextResponse.json({ ok: false, error: 'DB env missing' }, { status: 500 });
+  }
+
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });

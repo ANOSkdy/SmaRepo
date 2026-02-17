@@ -1,9 +1,13 @@
+export const runtime = 'nodejs';
+
 import { NextResponse } from 'next/server';
 import { computeDailyAttendance } from '@/lib/report/work/attendance/computeDailyAttendance';
 import { isBreakPolicyEnabled, resolveBreakPolicy } from '@/lib/policies/breakDeduction';
 import { fetchAttendanceSessions } from '@/lib/report/work/attendance/sessions';
 import { resolveSiteName } from '@/lib/report/work/attendance/siteUtils';
 import { normalizeSession } from '@/lib/report/work/attendance/normalize';
+import { auth } from '@/lib/auth';
+import { hasDatabaseUrl } from '@/lib/server-env';
 
 function parseDateParam(value: string | null): string | null {
   if (!value) {
@@ -24,6 +28,14 @@ function parseNumberParam(value: string | null, label: string): number | null {
 }
 
 export async function GET(req: Request) {
+  if (!hasDatabaseUrl()) {
+    return NextResponse.json({ ok: false, error: 'DB env missing' }, { status: 500 });
+  }
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(req.url);
   const dateParam = parseDateParam(searchParams.get('date'));
   const siteId = searchParams.get('siteId') || undefined;
