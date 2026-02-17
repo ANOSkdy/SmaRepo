@@ -1,14 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { getLogsBetween, summariseMonth } from '@/lib/airtable/logs';
+import { hasDatabaseUrl } from '@/lib/server-env';
+import { getLogsBetween, summariseMonth } from '@/lib/calendar/neon';
 
 export const runtime = 'nodejs';
 
-function resolveMonthRange(year: number, month: number) {
-  const startUtc = new Date(Date.UTC(year, month - 1, 1, -9, 0, 0));
-  const nextMonth = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
-  const endUtc = new Date(Date.UTC(nextMonth.year, nextMonth.month - 1, 1, -9, 0, 0));
-  return { from: startUtc, to: endUtc };
+function parseYearMonth(req: NextRequest): { year: number; month: number } | null {
+  const { searchParams } = new URL(req.url);
+  const yearValue = searchParams.get('year');
+  const monthValue = searchParams.get('month');
+  if (!yearValue || !monthValue) return null;
+
+  if (!/^\d{4}$/.test(yearValue) || !/^(?:[1-9]|1[0-2])$/.test(monthValue)) {
+    return null;
+  }
+
+  const year = Number.parseInt(yearValue, 10);
+  const month = Number.parseInt(monthValue, 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return null;
+  return { year, month };
+}
+
+function buildMonthRange(year: number, month: number) {
+  const start = `${year}-${String(month).padStart(2, '0')}-01`;
+  const next = new Date(Date.UTC(year, month, 1));
+  const endExclusive = `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}-01`;
+  return { start, endExclusive };
 }
 
 export async function GET(req: NextRequest) {
@@ -17,25 +34,21 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
 
-  const { searchParams } = new URL(req.url);
-  const yearValue = searchParams.get('year');
-  const monthValue = searchParams.get('month');
-  const year = yearValue ? Number.parseInt(yearValue, 10) : NaN;
-  const month = monthValue ? Number.parseInt(monthValue, 10) : NaN;
+  const parsed = parseYearMonth(req);
+  if (!parsed) {
+    return NextResponse.json({ error: 'INVALID_QUERY' }, { status: 400 });
+  }
 
-  if (!Number.isFinite(year) || !Number.isFinite(month) || year === 0 || month === 0) {
-    const normalizedYear = !Number.isFinite(year) || year === 0 ? null : year;
-    const normalizedMonth = !Number.isFinite(month) || month === 0 ? null : month;
-    return NextResponse.json({ year: normalizedYear, month: normalizedMonth, days: [] });
+  if (!hasDatabaseUrl()) {
+    return NextResponse.json({ ok: false, error: 'DB env missing' }, { status: 500 });
   }
 
   try {
-    const range = resolveMonthRange(year, month);
-    const logs = await getLogsBetween(range);
+    const range = buildMonthRange(parsed.year, parsed.month);
+    const logs = await getLogsBetween({ fromDate: range.start, toDateExclusive: range.endExclusive });
     const days = summariseMonth(logs);
-    return NextResponse.json({ year, month, days: days ?? [] });
-  } catch (error) {
-    console.error('[calendar][month] error', error);
-    return NextResponse.json({ year: null, month: null, days: [] });
+    return NextResponse.json({ year: parsed.year, month: parsed.month, days: days ?? [] });
+  } catch {
+    return NextResponse.json({ ok: false, error: 'DB query failed' }, { status: 500 });
   }
 }

@@ -15,7 +15,7 @@ execSync(
 );
 
 const routeModulePath = new URL('../dist/app/api/calendar/month/route.js', import.meta.url);
-const logsModulePath = new URL('../dist/lib/airtable/logs.js', import.meta.url);
+const logsModulePath = new URL('../dist/lib/calendar/neon.js', import.meta.url);
 let importCounter = 0;
 let logsImportCounter = 0;
 
@@ -83,7 +83,7 @@ async function importRouteWith(overrides = {}) {
     if (request === '@/lib/auth') {
       return { auth: (...args) => globalThis.__calendarAuthMock(...args) };
     }
-    if (request === '@/lib/airtable/logs') {
+    if (request === '@/lib/calendar/neon') {
       return {
         getLogsBetween: (...args) => globalThis.__calendarGetLogsMock(...args),
         summariseMonth: (...args) => globalThis.__calendarSummariseMock(...args),
@@ -108,23 +108,23 @@ test('month API returns 401 when unauthenticated', async () => {
   assert.strictEqual(getLogsMock.mock.calls.length, 0);
 });
 
-test('month API returns empty payload when params are missing', async () => {
+test('month API returns 400 when params are invalid', async () => {
   const authMock = mock.fn(async () => ({ user: { id: 'user-1' } }));
   const { GET } = await importRouteWith({ auth: authMock, getLogs: mock.fn(async () => []) });
   const response = await GET(new Request('https://example.com/api/calendar/month?year=&month='));
-  assert.strictEqual(response.status, 200);
-  assert.deepStrictEqual(await response.json(), { year: null, month: null, days: [] });
+  assert.strictEqual(response.status, 400);
+  assert.deepStrictEqual(await response.json(), { error: 'INVALID_QUERY' });
 });
 
-test('month API returns empty payload when Airtable access fails', async () => {
+test('month API returns 500 when DB query fails', async () => {
   const authMock = mock.fn(async () => ({ user: { id: 'user-1' } }));
   const getLogsMock = mock.fn(async () => {
-    throw new Error('airtable down');
+    throw new Error('db down');
   });
   const { GET } = await importRouteWith({ auth: authMock, getLogs: getLogsMock });
   const response = await GET(new Request('https://example.com/api/calendar/month?year=2025&month=9'));
-  assert.strictEqual(response.status, 200);
-  assert.deepStrictEqual(await response.json(), { year: null, month: null, days: [] });
+  assert.strictEqual(response.status, 500);
+  assert.deepStrictEqual(await response.json(), { ok: false, error: 'DB query failed' });
 });
 
 test('month API aggregates punches and sessions', async () => {
