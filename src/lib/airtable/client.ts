@@ -1,4 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises';
+import { getAirtableEnv } from '@/lib/airtable/env';
 
 type SortDirection = 'asc' | 'desc';
 
@@ -34,32 +35,40 @@ class AirtableError extends Error {
   }
 }
 
-const apiKey = process.env.AIRTABLE_API_KEY;
-const baseId = process.env.AIRTABLE_BASE_ID;
-
-if (!apiKey) {
-  throw new Error('AIRTABLE_API_KEY is not configured');
-}
-
-if (!baseId) {
-  throw new Error('AIRTABLE_BASE_ID is not configured');
-}
-
-const BASE_URL = `https://api.airtable.com/v0/${baseId}`;
 const MAX_PAGE_SIZE = 100;
+
+type AirtableConfig = {
+  apiKey: string;
+  baseUrl: string;
+};
+
+let cachedConfig: AirtableConfig | null = null;
+
+function getAirtableConfig(): AirtableConfig {
+  if (cachedConfig) {
+    return cachedConfig;
+  }
+  const { apiKey, baseId } = getAirtableEnv();
+  cachedConfig = {
+    apiKey,
+    baseUrl: `https://api.airtable.com/v0/${baseId}`,
+  };
+  return cachedConfig;
+}
 
 async function airtableFetch<TFields>(
   path: string,
   init: RequestInit,
   attempt = 0
 ): Promise<TFields> {
+  const { apiKey, baseUrl } = getAirtableConfig();
   const headers = new Headers(init.headers);
   headers.set('Authorization', `Bearer ${apiKey}`);
   if (init.method && init.method !== 'GET') {
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(`${BASE_URL}/${path}`, {
+  const response = await fetch(`${baseUrl}/${path}`, {
     ...init,
     headers,
     cache: 'no-store',
