@@ -39,6 +39,7 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 - `AUTH_SECRET`（推奨）または `NEXTAUTH_SECRET` を Preview/Production で同一値に設定し、ローテーション時は再ログインを周知する
 - `DATABASE_URL` / `NEON_DATABASE_URL` は `...?sslmode=verify-full` を付与した接続文字列を設定する
+- 初回ユーザー未投入時は `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` を設定して `pnpm db:seed-admin` を実行する
 - セッション異常時はブラウザの Cookie を削除して再ログインする
 - 環境変数更新後は Vercel の対象環境へ再デプロイする
 

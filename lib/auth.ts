@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs';
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import type { User } from 'next-auth';
@@ -9,8 +10,8 @@ const secret = getAuthSecret();
 
 type AuthUserRow = {
   id: string;
-  username: string | null;
-  password: string | null;
+  loginId: string | null;
+  passwordHash: string | null;
   name: string | null;
   role: string | null;
   userId: string | null;
@@ -25,8 +26,14 @@ function normalizeCredentialValue(value: unknown): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+function normalizeLoginIdentifier(value: unknown): string | null {
+  const normalized = normalizeCredentialValue(value);
+  return normalized ? normalized.toLowerCase() : null;
+}
+
 type AuthFailureReason =
   | 'MISSING_CREDENTIALS'
+  | 'NO_USERS_SEEDED'
   | 'USER_NOT_FOUND'
   | 'USER_INACTIVE'
   | 'BAD_PASSWORD'
@@ -50,6 +57,18 @@ function sanitizeErrorMessage(error: unknown): string {
     .slice(0, 200);
 }
 
+async function verifyPassword(inputPassword: string, storedPassword: string): Promise<boolean> {
+  if (storedPassword.startsWith('$2a$') || storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2y$')) {
+    try {
+      return await bcrypt.compare(inputPassword, storedPassword);
+    } catch {
+      return false;
+    }
+  }
+
+  return inputPassword === storedPassword;
+}
+
 export const {
   handlers: { GET, POST },
   auth,
@@ -66,10 +85,10 @@ export const {
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        const username = normalizeCredentialValue(credentials?.username);
+        const loginId = normalizeLoginIdentifier(credentials?.username);
         const password = normalizeCredentialValue(credentials?.password);
 
-        if (!username || !password) {
+        if (!loginId || !password) {
           logAuthFailure('MISSING_CREDENTIALS');
           return null;
         }
@@ -79,25 +98,60 @@ export const {
             `
               SELECT
                 u.id::text AS id,
-                COALESCE(to_jsonb(u)->>'username', to_jsonb(u)->>'email') AS username,
-                to_jsonb(u)->>'password' AS password,
-                COALESCE(to_jsonb(u)->>'name', to_jsonb(u)->>'username') AS name,
-                COALESCE(to_jsonb(u)->>'role', 'user') AS role,
-                COALESCE(to_jsonb(u)->>'userId', u.id::text) AS "userId",
+                COALESCE(
+                  to_jsonb(u)->>'username',
+                  to_jsonb(u)->>'email',
+                  to_jsonb(u)->>'userId',
+                  to_jsonb(u)->'payload'->>'username',
+                  to_jsonb(u)->'payload'->>'email',
+                  to_jsonb(u)->'payload'->>'userId'
+                ) AS "loginId",
+                COALESCE(
+                  to_jsonb(u)->>'password_hash',
+                  to_jsonb(u)->>'password',
+                  to_jsonb(u)->'payload'->>'password_hash',
+                  to_jsonb(u)->'payload'->>'password'
+                ) AS "passwordHash",
+                COALESCE(
+                  to_jsonb(u)->>'name',
+                  to_jsonb(u)->>'username',
+                  to_jsonb(u)->'payload'->>'name',
+                  to_jsonb(u)->'payload'->>'username'
+                ) AS name,
+                COALESCE(
+                  to_jsonb(u)->>'role',
+                  to_jsonb(u)->'payload'->>'role',
+                  'user'
+                ) AS role,
+                COALESCE(
+                  to_jsonb(u)->>'userId',
+                  to_jsonb(u)->>'username',
+                  to_jsonb(u)->'payload'->>'userId',
+                  to_jsonb(u)->'payload'->>'username',
+                  u.id::text
+                ) AS "userId",
                 CASE
-                  WHEN lower(COALESCE(to_jsonb(u)->>'active', 'true')) IN ('0', 'false', 'f', 'no', 'off') THEN FALSE
+                  WHEN lower(COALESCE(
+                    to_jsonb(u)->>'active',
+                    to_jsonb(u)->'payload'->>'active',
+                    'true'
+                  )) IN ('0', 'false', 'f', 'no', 'off') THEN FALSE
                   ELSE TRUE
                 END AS active
               FROM users u
-              WHERE COALESCE(to_jsonb(u)->>'username', to_jsonb(u)->>'email') = $1
+              WHERE
+                lower(COALESCE(to_jsonb(u)->>'username', to_jsonb(u)->'payload'->>'username', '')) = $1
+                OR lower(COALESCE(to_jsonb(u)->>'email', to_jsonb(u)->'payload'->>'email', '')) = $1
+                OR lower(COALESCE(to_jsonb(u)->>'userId', to_jsonb(u)->'payload'->>'userId', '')) = $1
               LIMIT 1
             `,
-            [username],
+            [loginId],
           );
 
           const userRecord = result.rows[0];
-          if (!userRecord || !userRecord.password) {
-            logAuthFailure('USER_NOT_FOUND');
+          if (!userRecord || !userRecord.passwordHash) {
+            const seedState = await query<{ hasUsers: boolean }>('SELECT EXISTS (SELECT 1 FROM users LIMIT 1) AS "hasUsers"');
+            logAuthFailure(seedState.rows[0]?.hasUsers ? 'USER_NOT_FOUND' : 'NO_USERS_SEEDED');
             return null;
           }
 
@@ -106,20 +160,19 @@ export const {
             return null;
           }
 
-          const isPasswordValid = password === userRecord.password;
+          const isPasswordValid = await verifyPassword(password, userRecord.passwordHash);
 
           if (isPasswordValid) {
             return {
               id: userRecord.id,
-              name: userRecord.name ?? userRecord.username ?? userRecord.id,
-              email: userRecord.username ?? undefined,
+              name: userRecord.name ?? userRecord.loginId ?? userRecord.id,
+              email: userRecord.loginId ?? undefined,
               role: userRecord.role ?? 'user',
               userId: userRecord.userId ?? userRecord.id,
             } as User;
           }
 
           logAuthFailure('BAD_PASSWORD');
-
           return null;
         } catch (error) {
           logAuthFailure('DB_ERROR', sanitizeErrorMessage(error));
@@ -131,7 +184,6 @@ export const {
   callbacks: {
     jwt({ token, user }) {
       if (user) {
-        // User object is available on sign-in.
         token.id = user.id!;
         token.role = user.role!;
         token.userId = user.userId!;
@@ -139,7 +191,6 @@ export const {
       return token;
     },
     session({ session, token }) {
-      // Add custom properties to the session object
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
@@ -153,7 +204,11 @@ export const {
   },
   logger: {
     error(code, ...metadata) {
-      console.error('Auth error', { code, metadata });
+      const authCode = typeof code === 'string' ? code : code?.name;
+      if (authCode === 'CredentialsSignin') {
+        return;
+      }
+      console.error('Auth error', { code: authCode, metadata });
     },
   },
 });
