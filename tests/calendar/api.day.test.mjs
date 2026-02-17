@@ -15,7 +15,7 @@ execSync(
 );
 
 const routeModulePath = new URL('../dist/app/api/calendar/day/route.js', import.meta.url);
-const logsModulePath = new URL('../dist/lib/airtable/logs.js', import.meta.url);
+const logsModulePath = new URL('../dist/lib/calendar/neon.js', import.meta.url);
 let importCounter = 0;
 let logsImportCounter = 0;
 
@@ -83,7 +83,7 @@ async function importRouteWith(overrides = {}) {
     if (request === '@/lib/auth') {
       return { auth: (...args) => globalThis.__calendarAuthMock(...args) };
     }
-    if (request === '@/lib/airtable/logs') {
+    if (request === '@/lib/calendar/neon') {
       return {
         getLogsBetween: (...args) => globalThis.__calendarGetLogsMock(...args),
         buildDayDetail: (...args) => globalThis.__calendarBuildDayMock(...args),

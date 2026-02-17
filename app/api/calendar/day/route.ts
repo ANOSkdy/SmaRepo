@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { buildDayDetail, getLogsBetween } from '@/lib/airtable/logs';
-import { LOG_FIELDS } from '@/lib/airtable/schema';
+import { hasDatabaseUrl } from '@/lib/server-env';
+import { buildDayDetail, getLogsBetween } from '@/lib/calendar/neon';
 
 export const runtime = 'nodejs';
 
@@ -9,47 +9,41 @@ function errorResponse(code: string, status: number) {
   return NextResponse.json({ error: code }, { status });
 }
 
-function resolveDayRange(date: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
-  if (!match) {
-    return null;
-  }
-  const year = Number.parseInt(match[1], 10);
-  const month = Number.parseInt(match[2], 10);
-  const day = Number.parseInt(match[3], 10);
-  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
-    return null;
-  }
-  const from = new Date(Date.UTC(year, month - 1, day, -9, 0, 0));
-  const to = new Date(Date.UTC(year, month - 1, day + 1, -9, 0, 0));
-  return { from, to };
+function isValidDateString(date: string): boolean {
+  const matched = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!matched) return false;
+  const [, y, m, d] = matched;
+  const year = Number.parseInt(y, 10);
+  const month = Number.parseInt(m, 10);
+  const day = Number.parseInt(d, 10);
+  const utc = new Date(Date.UTC(year, month - 1, day));
+  return (
+    utc.getUTCFullYear() === year && utc.getUTCMonth() + 1 === month && utc.getUTCDate() === day
+  );
+}
+
+function nextDate(date: string): string {
+  const [year, month, day] = date.split('-').map((v) => Number.parseInt(v, 10));
+  const next = new Date(Date.UTC(year, month - 1, day + 1));
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}-${String(next.getUTCDate()).padStart(2, '0')}`;
 }
 
 function normalizeLookupText(value: unknown): string | null {
-  if (value === null || value === undefined) {
-    return null;
-  }
+  if (value == null) return null;
   if (Array.isArray(value)) {
     for (const entry of value) {
       const normalized = normalizeLookupText(entry);
-      if (normalized) {
-        return normalized;
-      }
+      if (normalized) return normalized;
     }
     return null;
   }
   const trimmed = String(value).trim();
-  if (trimmed.length === 0) {
-    return null;
-  }
-  return trimmed;
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 function normalizeMachineId(value: unknown): string | null {
   const trimmed = normalizeLookupText(value);
-  if (!trimmed) {
-    return null;
-  }
+  if (!trimmed) return null;
   if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
     try {
       const parsed = JSON.parse(trimmed);
@@ -57,14 +51,12 @@ function normalizeMachineId(value: unknown): string | null {
         for (const item of parsed) {
           if (typeof item === 'string') {
             const normalized = normalizeMachineId(item);
-            if (normalized) {
-              return normalized;
-            }
+            if (normalized) return normalized;
           }
         }
       }
     } catch {
-      // ignore JSON parse errors and fall back to raw string handling
+      // ignore parse errors
     }
   }
   const [first] = trimmed.split(',');
@@ -78,76 +70,61 @@ export async function GET(req: NextRequest) {
     return errorResponse('UNAUTHORIZED', 401);
   }
 
+  const { searchParams } = new URL(req.url);
+  const date = searchParams.get('date');
+  if (!date) return errorResponse('MISSING_DATE', 400);
+  if (!isValidDateString(date)) return errorResponse('INVALID_DATE', 400);
+
+  if (!hasDatabaseUrl()) {
+    return NextResponse.json({ ok: false, error: 'DB env missing' }, { status: 500 });
+  }
+
   try {
-    const { searchParams } = new URL(req.url);
-    const date = searchParams.get('date');
-    if (!date) {
-      return errorResponse('MISSING_DATE', 400);
-    }
-
-    const range = resolveDayRange(date);
-    if (!range) {
-      return errorResponse('INVALID_DATE', 400);
-    }
-
-    const logs = await getLogsBetween(range);
+    const logs = await getLogsBetween({ fromDate: date, toDateExclusive: nextDate(date) });
     const { sessions } = buildDayDetail(logs);
-
     const logById = new Map(logs.map((log) => [log.id, log] as const));
-    const userLookupCandidates = [
-      'name (from user)',
-      'userName (from user)',
-      'userName',
-      'username',
-    ] as const;
-    const machineLookupCandidates = [
-      LOG_FIELDS.machineId,
-      LOG_FIELDS.machineid,
-      LOG_FIELDS.machineIdFromMachine,
-      LOG_FIELDS.machineidFromMachine,
-    ] as const;
-    const machineNameLookupCandidates = [
-      LOG_FIELDS.machineName,
-      LOG_FIELDS.machinename,
-      LOG_FIELDS.machineNameFromMachine,
-      LOG_FIELDS.machinenameFromMachine,
-    ] as const;
 
     const readLookup = (
       fields: Record<string, unknown> | undefined,
       candidates: readonly string[],
       normalizer: (value: unknown) => string | null,
     ): string | null => {
-      if (!fields) {
-        return null;
-      }
+      if (!fields) return null;
       for (const key of candidates) {
-        if (!Object.prototype.hasOwnProperty.call(fields, key)) {
-          continue;
-        }
+        if (!Object.prototype.hasOwnProperty.call(fields, key)) continue;
         const normalized = normalizer(fields[key]);
-        if (normalized) {
-          return normalized;
-        }
+        if (normalized) return normalized;
       }
       return null;
     };
 
-    const sessionsWithLookup = sessions.map((session) => {
-      const startLog = logById.get(session.startLogId);
-      const endLog = session.endLogId ? logById.get(session.endLogId) : undefined;
+    const userLookupCandidates = ['name (from user)', 'userName (from user)', 'userName', 'username'] as const;
+    const machineLookupCandidates = [
+      'machineId',
+      'machineid',
+      'machineId (from machine)',
+      'machineid (from machine)',
+    ] as const;
+    const machineNameLookupCandidates = [
+      'machineName',
+      'machinename',
+      'machineName (from machine)',
+      'machinename (from machine)',
+    ] as const;
 
-      // Logs テーブルの Lookup で解決できる名称のみを利用する
+    const sessionsWithLookup = sessions.map((entry) => {
+      const startLog = logById.get(entry.startLogId);
+      const endLog = entry.endLogId ? logById.get(entry.endLogId) : undefined;
+
       const userName =
         readLookup(startLog?.rawFields, userLookupCandidates, normalizeLookupText) ??
         readLookup(endLog?.rawFields, userLookupCandidates, normalizeLookupText) ??
-        null;
+        entry.userName;
 
       const machineId =
         readLookup(startLog?.rawFields, machineLookupCandidates, normalizeMachineId) ??
         readLookup(endLog?.rawFields, machineLookupCandidates, normalizeMachineId) ??
-        normalizeMachineId(startLog?.machineId) ??
-        normalizeMachineId(endLog?.machineId) ??
+        normalizeMachineId(entry.machineId) ??
         null;
 
       const machineName =
@@ -158,7 +135,7 @@ export async function GET(req: NextRequest) {
         null;
 
       return {
-        ...session,
+        ...entry,
         userName,
         machineId,
         machineName,
@@ -166,8 +143,7 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ date, sessions: sessionsWithLookup });
-  } catch (error) {
-    console.error('[calendar][day] failed to fetch day detail', error);
+  } catch {
     return errorResponse('INTERNAL_ERROR', 500);
   }
 }
