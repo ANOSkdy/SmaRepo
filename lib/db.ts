@@ -22,14 +22,15 @@ type Pool = {
 type DbClient = Pick<PoolClient, 'query'>;
 
 type PgModule = {
-  Pool: new (config: { connectionString: string; ssl: { rejectUnauthorized: boolean } }) => Pool;
+  Pool: new (config: { connectionString: string }) => Pool;
 };
 
 let poolPromise: Promise<Pool> | null = null;
 
 async function loadPgModule(): Promise<PgModule> {
   try {
-    const dynamicImport = (0, eval)('import("pg")') as Promise<PgModule>;
+    const moduleName = 'pg';
+    const dynamicImport = import(moduleName) as Promise<PgModule>;
     return await dynamicImport;
   } catch {
     throw new Error('Postgres client is not available');
@@ -44,7 +45,6 @@ async function getPool(): Promise<Pool> {
 
       return new Pool({
         connectionString: databaseUrl,
-        ssl: { rejectUnauthorized: false },
       });
     })();
   }

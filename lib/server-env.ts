@@ -1,11 +1,15 @@
 import 'server-only';
 
+import { normalizePostgresConnectionString } from '@/lib/postgres-connection';
+
 const DATABASE_ENV_KEYS = ['DATABASE_URL', 'NEON_DATABASE_URL'] as const;
 
 export function getDatabaseUrl(): string {
   for (const key of DATABASE_ENV_KEYS) {
     const value = process.env[key];
-    if (value) return value;
+    if (value) {
+      return normalizePostgresConnectionString(value);
+    }
   }
 
   throw new Error('DB env missing');
