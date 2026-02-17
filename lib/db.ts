@@ -22,7 +22,7 @@ type Pool = {
 type DbClient = Pick<PoolClient, 'query'>;
 
 type PgModule = {
-  Pool: new (config: { connectionString: string; ssl: { rejectUnauthorized: boolean } }) => Pool;
+  Pool: new (config: { connectionString: string }) => Pool;
 };
 
 let poolPromise: Promise<Pool> | null = null;
@@ -45,7 +45,6 @@ async function getPool(): Promise<Pool> {
 
       return new Pool({
         connectionString: databaseUrl,
-        ssl: { rejectUnauthorized: false },
       });
     })();
   }

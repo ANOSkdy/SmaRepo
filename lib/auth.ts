@@ -25,6 +25,31 @@ function normalizeCredentialValue(value: unknown): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+type AuthFailureReason =
+  | 'MISSING_CREDENTIALS'
+  | 'USER_NOT_FOUND'
+  | 'USER_INACTIVE'
+  | 'BAD_PASSWORD'
+  | 'DB_ERROR';
+
+function logAuthFailure(reason: AuthFailureReason, detail?: string) {
+  if (detail) {
+    console.warn('[auth][credentials] failure', { reason, detail });
+    return;
+  }
+  console.warn('[auth][credentials] failure', { reason });
+}
+
+function sanitizeErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return 'unknown error';
+  }
+
+  return error.message
+    .replace(/postgres(?:ql)?:\/\/[^\s]*/gi, '[redacted-connection-string]')
+    .slice(0, 200);
+}
+
 export const {
   handlers: { GET, POST },
   auth,
@@ -45,6 +70,7 @@ export const {
         const password = normalizeCredentialValue(credentials?.password);
 
         if (!username || !password) {
+          logAuthFailure('MISSING_CREDENTIALS');
           return null;
         }
 
@@ -70,7 +96,13 @@ export const {
           );
 
           const userRecord = result.rows[0];
-          if (!userRecord || !userRecord.password || !userRecord.active) {
+          if (!userRecord || !userRecord.password) {
+            logAuthFailure('USER_NOT_FOUND');
+            return null;
+          }
+
+          if (!userRecord.active) {
+            logAuthFailure('USER_INACTIVE');
             return null;
           }
 
@@ -86,9 +118,11 @@ export const {
             } as User;
           }
 
+          logAuthFailure('BAD_PASSWORD');
+
           return null;
         } catch (error) {
-          console.error('Authorize error:', error);
+          logAuthFailure('DB_ERROR', sanitizeErrorMessage(error));
           return null;
         }
       },
