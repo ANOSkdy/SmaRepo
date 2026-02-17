@@ -16,3 +16,5 @@ tests/dist
 ai-nippo/
 
 .env*.local
+.env
+.env.*
