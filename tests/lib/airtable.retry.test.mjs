@@ -18,15 +18,12 @@ test('withRetry retries and uses exponential backoff', async () => {
   const delays = [];
 
   try {
-    process.env.AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY || 'test_key';
-    process.env.AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || 'test_base';
-
     global.setTimeout = ((callback, ms, ...args) => {
       delays.push(ms ?? 0);
       return originalSetTimeout(callback, 0, ...args);
     });
 
-    const { withRetry } = await import('../dist/lib/airtable.js');
+    const { withRetry } = await import('../dist/lib/utils/retry.js');
     let attempts = 0;
     const result = await withRetry(
       async () => {
