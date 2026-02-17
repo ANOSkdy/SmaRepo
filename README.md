@@ -37,7 +37,7 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 ## Runbook
 
-- `NEXTAUTH_SECRET` は Preview/Production で同一値を使用し、ローテーション時は再ログインを周知する
+- `AUTH_SECRET`（推奨）または `NEXTAUTH_SECRET` を Preview/Production で同一値に設定し、ローテーション時は再ログインを周知する
 - セッション異常時はブラウザの Cookie を削除して再ログインする
 - 環境変数更新後は Vercel の対象環境へ再デプロイする
 

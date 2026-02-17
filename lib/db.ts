@@ -29,7 +29,8 @@ let poolPromise: Promise<Pool> | null = null;
 
 async function loadPgModule(): Promise<PgModule> {
   try {
-    const dynamicImport = (0, eval)('import("pg")') as Promise<PgModule>;
+    const moduleName = 'pg';
+    const dynamicImport = import(moduleName) as Promise<PgModule>;
     return await dynamicImport;
   } catch {
     throw new Error('Postgres client is not available');
