@@ -1,4 +1,3 @@
-import { usersTable } from '@/lib/airtable';
 import { formatMinutes } from '@/lib/format';
 import {
   groupReportRowsByDate,
@@ -7,6 +6,7 @@ import {
 } from '@/lib/report-groupers';
 import type { ReportRow } from '@/lib/reports/pair';
 import { getReportRowsByUserName } from '@/lib/services/reports';
+import { query } from '@/lib/db';
 
 export type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -78,15 +78,20 @@ export function parseFilters(searchParams?: SearchParams): Filters {
   };
 }
 
+type UserNameRow = { name: string | null };
+
 export async function fetchUsers(): Promise<string[]> {
-  const records = await usersTable
-    .select({ fields: ['name'], sort: [{ field: 'name', direction: 'asc' }] })
-    .all();
+  const result = await query<UserNameRow>(
+    `
+      SELECT COALESCE(to_jsonb(u)->>'name', to_jsonb(u)->>'username') AS name
+      FROM users u
+      ORDER BY COALESCE(to_jsonb(u)->>'name', to_jsonb(u)->>'username', '') ASC
+    `,
+  );
   const names = new Set<string>();
-  for (const record of records) {
-    const name = typeof record.fields.name === 'string' ? record.fields.name : null;
-    if (name) {
-      names.add(name);
+  for (const row of result.rows) {
+    if (row.name && row.name.trim()) {
+      names.add(row.name.trim());
     }
   }
   return Array.from(names).sort((a, b) => a.localeCompare(b, 'ja'));

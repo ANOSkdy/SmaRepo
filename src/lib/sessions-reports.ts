@@ -1,96 +1,4 @@
-import { usersTable, withRetry } from '@/lib/airtable';
-import type { UserFields } from '@/types';
-import { getAirtableEnv } from '@/lib/airtable/env';
-
-type AirtableSessionConfig = {
-  apiKey: string;
-  apiBase: string;
-};
-
-let cachedAirtableSessionConfig: AirtableSessionConfig | null = null;
-
-function getAirtableSessionConfig(): AirtableSessionConfig {
-  if (cachedAirtableSessionConfig) {
-    return cachedAirtableSessionConfig;
-  }
-  const { apiKey, baseId } = getAirtableEnv();
-  cachedAirtableSessionConfig = {
-    apiKey,
-    apiBase: `https://api.airtable.com/v0/${baseId}`,
-  };
-  return cachedAirtableSessionConfig;
-}
-
-const SESSIONS_TABLE = 'Sessions';
-const PAGE_SIZE = 100;
-const MAX_RETRY = 3;
-const RETRY_DELAY = 500;
-
-type SessionFields = Record<string, unknown>;
-
-type RawAirtableRecord = {
-  id: string;
-  createdTime: string;
-  fields: SessionFields;
-};
-
-function normalizeFieldKey(key: string): string {
-  return key.trim().toLowerCase();
-}
-
-function getFieldValue<T = unknown>(fields: SessionFields, fieldName: string): T | undefined {
-  const target = normalizeFieldKey(fieldName);
-  for (const [key, value] of Object.entries(fields)) {
-    if (normalizeFieldKey(key) === target) {
-      return value as T;
-    }
-  }
-  return undefined;
-}
-
-function extractLookupText(value: unknown): string | null {
-  const direct = asString(value);
-  if (direct) {
-    return direct;
-  }
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      const candidate = extractLookupText(entry);
-      if (candidate) {
-        return candidate;
-      }
-    }
-    return null;
-  }
-  if (value && typeof value === 'object') {
-    const source =
-      (value as { name?: unknown }).name ??
-      (value as { value?: unknown }).value ??
-      (value as { text?: unknown }).text ??
-      (value as { label?: unknown }).label ??
-      null;
-    if (source != null) {
-      return extractLookupText(source);
-    }
-  }
-  return null;
-}
-
-function pickFirstString(fields: SessionFields, fieldNames: string[]): string | null {
-  for (const fieldName of fieldNames) {
-    const value = getFieldValue(fields, fieldName);
-    const str = extractLookupText(value);
-    if (str) {
-      return str;
-    }
-  }
-  return null;
-}
-
-type AirtableListResponse = {
-  records: RawAirtableRecord[];
-  offset?: string;
-};
+import { query } from '@/lib/db';
 
 export type SessionReportRow = {
   id: string;
@@ -131,96 +39,21 @@ export type SessionReportQuery = {
   workDescription?: string | null;
 };
 
-function buildUrl(offset?: string): string {
-  const { apiBase } = getAirtableSessionConfig();
-  const url = new URL(`${apiBase}/${encodeURIComponent(SESSIONS_TABLE)}`);
-  url.searchParams.set('pageSize', String(PAGE_SIZE));
-  if (offset) {
-    url.searchParams.set('offset', offset);
-  }
-  return url.toString();
-}
-
-async function fetchPage(url: string, attempt = 0): Promise<AirtableListResponse> {
-  const { apiKey } = getAirtableSessionConfig();
-  const headers = { Authorization: `Bearer ${apiKey}` };
-  const response = await fetch(url, {
-    headers,
-    cache: 'no-store',
-  });
-
-  if (response.status === 429 || response.status >= 500) {
-    if (attempt < MAX_RETRY) {
-      const delay = RETRY_DELAY * 2 ** attempt;
-      await new Promise((resolve) => setTimeout(resolve, delay));
-      return fetchPage(url, attempt + 1);
-    }
-  }
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Airtable fetch failed: ${response.status} ${response.statusText} – ${body}`);
-  }
-
-  return (await response.json()) as AirtableListResponse;
-}
-
-async function fetchAllSessionRecords(): Promise<RawAirtableRecord[]> {
-  const records: RawAirtableRecord[] = [];
-  let offset: string | undefined;
-  do {
-    const url = buildUrl(offset);
-    const page = await fetchPage(url);
-    records.push(...page.records);
-    offset = page.offset;
-  } while (offset);
-  return records;
-}
-
-function parseDateParts(dateStr: string | null): { year: number | null; month: number | null; day: number | null } {
-  if (!dateStr) {
-    return { year: null, month: null, day: null };
-  }
-  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) {
-    return { year: null, month: null, day: null };
-  }
-  const [, y, m, d] = match;
-  const year = Number.parseInt(y, 10);
-  const month = Number.parseInt(m, 10);
-  const day = Number.parseInt(d, 10);
-  return {
-    year: Number.isFinite(year) ? year : null,
-    month: Number.isFinite(month) ? month : null,
-    day: Number.isFinite(day) ? day : null,
-  };
-}
+type SessionPayloadRow = { payload: Record<string, unknown> };
 
 function asString(value: unknown): string | null {
   if (typeof value === 'string') {
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
   }
-  return null;
-}
-
-function asBoolean(value: unknown): boolean | null {
-  if (typeof value === 'boolean') {
-    return value;
-  }
-  if (value === 'true') {
-    return true;
-  }
-  if (value === 'false') {
-    return false;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? String(value) : null;
   }
   return null;
 }
 
 function asNumber(value: unknown): number | null {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : null;
-  }
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
   if (typeof value === 'string') {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
@@ -228,147 +61,86 @@ function asNumber(value: unknown): number | null {
   return null;
 }
 
-function firstId(value: unknown): string | null {
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      if (typeof entry === 'string' && entry.trim()) {
-        return entry.trim();
-      }
-    }
-    return null;
-  }
-  if (typeof value === 'string' && value.trim()) {
-    return value.trim();
-  }
+function asBoolean(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
   return null;
 }
 
-function extractUserName(fields: SessionFields): string | null {
-  const direct = pickFirstString(fields, [
-    'name (from user)',
-    'user name',
-    'userName',
-    'username',
-    'ユーザー名',
-    'ユーザー名 (from user)',
-    'display name',
-    'displayName',
-  ]);
-  if (direct) {
-    return direct;
-  }
-
-  for (const [key, value] of Object.entries(fields)) {
-    if (typeof value !== 'string') {
+function readFirstString(fields: Record<string, unknown>, keys: readonly string[]): string | null {
+  for (const key of keys) {
+    const value = fields[key];
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        const text = asString(entry);
+        if (text) return text;
+      }
       continue;
     }
-    const normalizedKey = normalizeFieldKey(key);
-    if (normalizedKey.includes('user') && normalizedKey.includes('name')) {
-      const candidate = asString(value);
-      if (candidate) {
-        return candidate;
-      }
-    }
-    if (normalizedKey.includes('user') && normalizedKey.includes('display')) {
-      const candidate = asString(value);
-      if (candidate) {
-        return candidate;
-      }
-    }
+    const text = asString(value);
+    if (text) return text;
   }
   return null;
 }
 
-function toSessionRow(record: RawAirtableRecord): SessionReportRow | null {
-  const fields = record.fields ?? {};
-  const date = asString(getFieldValue(fields, 'date'));
-  const { year, month, day } = parseDateParts(date);
-  const start = pickFirstString(fields, ['start', 'start (JST)']);
-  const end = pickFirstString(fields, ['end', 'end (JST)']);
-  const durationMin = asNumber(getFieldValue(fields, 'durationMin'));
-  const hours = durationMin != null ? Math.round((durationMin / 60) * 10) / 10 : null;
-  const siteName = pickFirstString(fields, ['siteName', 'site name', 'site Name']);
-  const siteRecordId = firstId(getFieldValue(fields, 'site'));
-  const clientName =
-    pickFirstString(fields, ['clientName', 'client', 'client (from site)']) ??
-    pickFirstString(fields, ['client name', 'clientName (from site)']);
-  const workDescription = pickFirstString(fields, [
-    'workDescription',
-    'work description',
-    'workDescription (from work)',
-    'description (from work)',
-  ]);
+function parseDateParts(dateStr: string | null): { year: number | null; month: number | null; day: number | null } {
+  if (!dateStr) return { year: null, month: null, day: null };
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return { year: null, month: null, day: null };
+  return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
+}
 
-  const rawUserId =
-    asNumber(getFieldValue(fields, 'userId')) ?? asNumber(getFieldValue(fields, 'userId (from user)'));
-  const userRecordId = firstId(getFieldValue(fields, 'user'));
-  const userName = extractUserName(fields);
-
-  const machineRecordId = firstId(getFieldValue(fields, 'machine'));
-  const machineIdValue = pickFirstString(fields, [
-    'machineId',
-    'machineId (from machine)',
-    'machine id',
-    'machineid',
-  ]);
-  const machineIdNumber =
-    asNumber(getFieldValue(fields, 'machineId')) ?? asNumber(getFieldValue(fields, 'machineId (from machine)'));
-  const machineId = machineIdValue ?? (machineIdNumber != null ? String(machineIdNumber) : null);
-  const machineName = pickFirstString(fields, [
-    'machineName',
-    'machineName (from machine)',
-    'machine name',
-    'machinename',
-  ]);
-
-  const status = pickFirstString(fields, ['status']);
-  const autoGenerated = asBoolean(getFieldValue(fields, 'autoGenerated'));
-
+function toSessionRow(payload: Record<string, unknown>): SessionReportRow | null {
+  const fields =
+    payload.fields && typeof payload.fields === 'object' && !Array.isArray(payload.fields)
+      ? (payload.fields as Record<string, unknown>)
+      : payload;
+  const date = asString(fields.date);
+  const dateParts = parseDateParts(date);
+  const start = readFirstString(fields, ['start', 'start (JST)']);
+  const end = readFirstString(fields, ['end', 'end (JST)']);
+  const durationMin = asNumber(fields.durationMin);
   const startMs = start ? Date.parse(start) : Number.NaN;
   const endMs = end ? Date.parse(end) : Number.NaN;
   const normalizedStartMs = Number.isFinite(startMs) ? startMs : null;
   const normalizedEndMs = Number.isFinite(endMs) ? endMs : null;
-  const isCompleted = Boolean(durationMin && durationMin > 0 && normalizedStartMs !== null && normalizedEndMs !== null);
+  const hours = durationMin != null ? Math.round((durationMin / 60) * 10) / 10 : null;
 
   return {
-    id: record.id,
+    id: asString(fields.id) ?? asString(payload.id) ?? `${date ?? 'session'}-${normalizedStartMs ?? 0}`,
     date,
-    year,
-    month,
-    day,
-    start: start ?? null,
-    end: end ?? null,
+    year: dateParts.year,
+    month: dateParts.month,
+    day: dateParts.day,
+    start,
+    end,
     startMs: normalizedStartMs,
     endMs: normalizedEndMs,
     durationMin,
     hours,
-    siteName,
-    siteRecordId,
-    clientName,
-    workDescription,
-    userId: rawUserId,
-    userRecordId,
-    userName,
-    machineId,
-    machineRecordId,
-    machineName,
-    status,
-    autoGenerated,
-    isCompleted,
+    siteName: readFirstString(fields, ['siteName', 'site name']),
+    siteRecordId: Array.isArray(fields.site) ? asString(fields.site[0]) : asString(fields.siteRecordId),
+    clientName: readFirstString(fields, ['clientName', 'client']),
+    workDescription: readFirstString(fields, ['workDescription', 'work description']),
+    userId: asNumber(fields.userId ?? fields.user),
+    userRecordId: Array.isArray(fields.user) ? asString(fields.user[0]) : asString(fields.userRecordId),
+    userName: readFirstString(fields, ['name (from user)', 'userName', 'username', 'name']),
+    machineId: readFirstString(fields, ['machineId', 'machineid', 'machineId (from machine)']),
+    machineRecordId: Array.isArray(fields.machine) ? asString(fields.machine[0]) : asString(fields.machineRecordId),
+    machineName: readFirstString(fields, ['machineName', 'machinename', 'machineName (from machine)']),
+    status: asString(fields.status),
+    autoGenerated: asBoolean(fields.autoGenerated),
+    isCompleted: Boolean(durationMin && durationMin > 0 && normalizedStartMs != null && normalizedEndMs != null),
   };
 }
 
 function normalizeText(value: string | null | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-  return value.trim().toLocaleLowerCase('ja');
+  return value ? value.trim().toLocaleLowerCase('ja') : null;
 }
 
 function toNumber(value: string | number | null | undefined): number | null {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : null;
-  }
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
   if (typeof value === 'string') {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
@@ -376,192 +148,53 @@ function toNumber(value: string | number | null | undefined): number | null {
   return null;
 }
 
-function matchesQuery(row: SessionReportRow, query?: SessionReportQuery): boolean {
-  if (!query) {
-    return true;
+function matchesQuery(row: SessionReportRow, q?: SessionReportQuery): boolean {
+  if (!q) return true;
+  if (q.siteId && row.siteRecordId !== q.siteId) return false;
+  if (q.siteName) {
+    const e = normalizeText(q.siteName);
+    const a = normalizeText(row.siteName);
+    if (e && a && e !== a) return false;
   }
-  if (query.siteId) {
-    if (row.siteRecordId !== query.siteId) {
-      return false;
-    }
+  if (q.userName) {
+    const e = normalizeText(q.userName);
+    const a = normalizeText(row.userName);
+    if (e && a && e !== a) return false;
   }
-  if (query.siteName) {
-    const expected = normalizeText(query.siteName);
-    const actual = normalizeText(row.siteName);
-    if (expected && actual && expected !== actual) {
-      return false;
-    }
+  if (q.userId != null) {
+    const e = toNumber(q.userId);
+    if (e != null && row.userId !== e) return false;
   }
-  if (query.userName) {
-    const expected = normalizeText(query.userName);
-    const actual = normalizeText(row.userName);
-    if (expected && actual && expected !== actual) {
-      return false;
-    }
+  if (q.machineId != null) {
+    const e = normalizeText(String(q.machineId));
+    const a = normalizeText(row.machineId);
+    if (e && a && e !== a) return false;
   }
-  if (query.userId != null) {
-    const expected = toNumber(query.userId);
-    if (expected != null && row.userId !== expected) {
-      return false;
-    }
+  if (q.workDescription) {
+    const e = normalizeText(q.workDescription);
+    const a = normalizeText(row.workDescription);
+    if (e && a && e !== a) return false;
   }
-  if (query.machineId != null) {
-    const expected = normalizeText(String(query.machineId));
-    const actual = normalizeText(row.machineId);
-    if (expected && actual && expected !== actual) {
-      return false;
-    }
-  }
-  if (query.workDescription) {
-    const expected = normalizeText(query.workDescription);
-    const actual = normalizeText(row.workDescription);
-    if (expected && actual && expected !== actual) {
-      return false;
-    }
-  }
-  if (query.year != null) {
-    const expected = toNumber(query.year);
-    if (expected != null && row.year !== expected) {
-      return false;
-    }
-  }
-  if (query.month != null) {
-    const expected = toNumber(query.month);
-    if (expected != null && row.month !== expected) {
-      return false;
-    }
-  }
-  if (query.day != null) {
-    const expected = toNumber(query.day);
-    if (expected != null && row.day !== expected) {
-      return false;
-    }
-  }
+  if (q.year != null && row.year !== toNumber(q.year)) return false;
+  if (q.month != null && row.month !== toNumber(q.month)) return false;
+  if (q.day != null && row.day !== toNumber(q.day)) return false;
   return true;
 }
 
-function sortSessions(rows: SessionReportRow[]): SessionReportRow[] {
-  return rows.sort((a, b) => {
-    const dateA = a.date ?? '';
-    const dateB = b.date ?? '';
-    if (dateA !== dateB) {
-      return dateA.localeCompare(dateB);
-    }
-    const startA = a.startMs ?? Number.POSITIVE_INFINITY;
-    const startB = b.startMs ?? Number.POSITIVE_INFINITY;
-    if (startA !== startB) {
-      return startA - startB;
-    }
-    const nameA = a.userName ?? '';
-    const nameB = b.userName ?? '';
-    const nameCompare = nameA.localeCompare(nameB, 'ja');
-    if (nameCompare !== 0) {
-      return nameCompare;
-    }
-    return a.id.localeCompare(b.id);
-  });
-}
+export async function fetchSessionReportRows(queryParams?: SessionReportQuery): Promise<SessionReportRow[]> {
+  const result = await query<SessionPayloadRow>(
+    `
+      SELECT to_jsonb(s) AS payload
+      FROM sessions s
+      ORDER BY
+        COALESCE(to_jsonb(s)->>'date', '') ASC,
+        COALESCE(to_jsonb(s)->>'start', '') ASC,
+        COALESCE(to_jsonb(s)->>'id', '') ASC
+    `,
+  );
 
-function chunkArray<T>(values: readonly T[], size: number): T[][] {
-  if (size <= 0) {
-    return [Array.from(values)];
-  }
-  const chunks: T[][] = [];
-  for (let index = 0; index < values.length; index += size) {
-    chunks.push(values.slice(index, index + size));
-  }
-  return chunks;
-}
-
-function buildRecordIdFormula(ids: readonly string[]): string {
-  if (ids.length === 1) {
-    return `RECORD_ID()='${ids[0].replace(/'/g, "\\'")}'`;
-  }
-  const parts = ids.map((id) => `RECORD_ID()='${id.replace(/'/g, "\\'")}'`);
-  return `OR(${parts.join(',')})`;
-}
-
-type UserHydration = {
-  name: string | null;
-  userId: number | null;
-};
-
-async function fetchUserHydrationMap(recordIds: string[]): Promise<Map<string, UserHydration>> {
-  const map = new Map<string, UserHydration>();
-  if (recordIds.length === 0) {
-    return map;
-  }
-
-  const uniqueIds = Array.from(new Set(recordIds));
-  const batches = chunkArray(uniqueIds, 15);
-
-  for (const batch of batches) {
-    const formula = buildRecordIdFormula(batch);
-    const records = await withRetry(() =>
-      usersTable
-        .select({
-          filterByFormula: formula,
-          fields: ['name', 'username', 'userId'],
-        })
-        .all(),
-    );
-
-    for (const record of records) {
-      const fields = record.fields as Partial<UserFields> | undefined;
-      const name = asString(fields?.name) ?? asString(fields?.username) ?? null;
-      const userId = asNumber(fields?.userId);
-      map.set(record.id, { name, userId });
-    }
-  }
-
-  return map;
-}
-
-async function hydrateUserNames(rows: SessionReportRow[]): Promise<void> {
-  const needsHydration = rows.filter((row) => {
-    if (!row.userRecordId) {
-      return false;
-    }
-    const missingName = !row.userName || row.userName.trim().length === 0;
-    const missingUserId = row.userId == null || !Number.isFinite(row.userId);
-    return missingName || missingUserId;
-  });
-
-  if (needsHydration.length === 0) {
-    return;
-  }
-
-  const recordIds = needsHydration
-    .map((row) => row.userRecordId)
-    .filter((id): id is string => typeof id === 'string' && id.length > 0);
-
-  const hydrationMap = await fetchUserHydrationMap(recordIds);
-
-  for (const row of needsHydration) {
-    if (!row.userRecordId) {
-      continue;
-    }
-    const hydration = hydrationMap.get(row.userRecordId);
-    if (!hydration) {
-      continue;
-    }
-    if ((!row.userName || row.userName.trim().length === 0) && hydration.name) {
-      row.userName = hydration.name;
-    }
-    if ((row.userId == null || !Number.isFinite(row.userId)) && hydration.userId != null) {
-      row.userId = hydration.userId;
-    }
-  }
-}
-
-export async function fetchSessionReportRows(query?: SessionReportQuery): Promise<SessionReportRow[]> {
-  const records = await fetchAllSessionRecords();
-  const rows = records
-    .map(toSessionRow)
-    .filter((row): row is SessionReportRow => row !== null && row.date !== null);
-
-  await hydrateUserNames(rows);
-
-  const filtered = rows.filter((row) => matchesQuery(row, query));
-  return sortSessions(filtered);
+  return result.rows
+    .map((row) => toSessionRow(row.payload))
+    .filter((row): row is SessionReportRow => row !== null && row.date !== null)
+    .filter((row) => matchesQuery(row, queryParams));
 }

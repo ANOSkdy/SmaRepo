@@ -1,11 +1,23 @@
+export const runtime = 'nodejs';
+
 import { NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
 
 import { getReportRowsByUserName } from '@/lib/services/reports';
+import { hasDatabaseUrl } from '@/lib/server-env';
 
 const SORT_KEYS = ['year', 'month', 'day', 'siteName'] as const;
 type SortKey = (typeof SORT_KEYS)[number];
 
 export async function GET(req: Request) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  }
+  if (!hasDatabaseUrl()) {
+    return NextResponse.json({ ok: false, error: 'DB env missing', rows: [] }, { status: 500 });
+  }
+
   const { searchParams } = new URL(req.url);
   const userName = searchParams.get('userName')?.trim();
   const sortParam = (searchParams.get('sort') ?? '').trim();

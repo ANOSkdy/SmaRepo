@@ -1,11 +1,6 @@
-import { listRecords } from '@/src/lib/airtable/client';
-import type { SiteFields } from '@/types';
+import { query } from '@/lib/db';
 
-const SITES_TABLE = 'Sites';
-
-function escapeFormulaValue(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
+type SiteNameRow = { name: string | null };
 
 export async function resolveSiteName(siteId?: string, siteName?: string): Promise<string | null> {
   if (siteName && siteName.trim().length > 0) {
@@ -14,15 +9,18 @@ export async function resolveSiteName(siteId?: string, siteName?: string): Promi
   if (!siteId) {
     return null;
   }
-  const records = await listRecords<SiteFields>({
-    table: SITES_TABLE,
-    filterByFormula: `{siteId} = "${escapeFormulaValue(siteId)}"`,
-    maxRecords: 1,
-    fields: ['name', 'siteId'],
-  });
-  const name = records[0]?.fields?.name;
-  if (typeof name === 'string' && name.trim().length > 0) {
-    return name.trim();
-  }
-  return null;
+
+  const result = await query<SiteNameRow>(
+    `
+      SELECT COALESCE(to_jsonb(s)->>'name', to_jsonb(s)->>'siteName') AS name
+      FROM sites s
+      WHERE COALESCE(to_jsonb(s)->>'siteId', to_jsonb(s)->>'id', '') = $1
+      ORDER BY COALESCE(to_jsonb(s)->>'id', '') ASC
+      LIMIT 1
+    `,
+    [siteId],
+  );
+
+  const name = result.rows[0]?.name;
+  return typeof name === 'string' && name.trim().length > 0 ? name.trim() : null;
 }

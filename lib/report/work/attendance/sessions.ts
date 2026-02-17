@@ -1,9 +1,5 @@
-import { usersTable, withRetry } from '@/lib/airtable';
-import type { UserFields } from '@/types';
-import { AirtableError, listRecords } from '@/src/lib/airtable/client';
+import { query } from '@/lib/db';
 import type { NormalizedSessionStatus } from './normalize';
-
-const SESSIONS_TABLE = 'Sessions';
 
 export type AttendanceSession = {
   id: string;
@@ -33,32 +29,17 @@ export type AttendanceSessionQuery = {
   machineId?: string | null;
 };
 
-type SessionFields = Record<string, unknown>;
-
-type RawSessionRecord = {
-  id: string;
-  createdTime: string;
-  fields: SessionFields;
+type SessionPayloadRow = {
+  payload: Record<string, unknown>;
 };
-
-function normalizeFieldKey(key: string): string {
-  return key.trim().toLowerCase();
-}
-
-function getFieldValue<T = unknown>(fields: SessionFields, fieldName: string): T | undefined {
-  const target = normalizeFieldKey(fieldName);
-  for (const [key, value] of Object.entries(fields)) {
-    if (normalizeFieldKey(key) === target) {
-      return value as T;
-    }
-  }
-  return undefined;
-}
 
 function asString(value: unknown): string | null {
   if (typeof value === 'string') {
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? String(value) : null;
   }
   return null;
 }
@@ -74,130 +55,40 @@ function asNumber(value: unknown): number | null {
   return null;
 }
 
-function extractLookupText(value: unknown): string | null {
-  const direct = asString(value);
-  if (direct) {
-    return direct;
-  }
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      const candidate = extractLookupText(entry);
-      if (candidate) {
-        return candidate;
+function readFirstString(fields: Record<string, unknown>, keys: readonly string[]): string | null {
+  for (const key of keys) {
+    const value = fields[key];
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        const text = asString(entry);
+        if (text) return text;
       }
-    }
-    return null;
-  }
-  if (value && typeof value === 'object') {
-    const source =
-      (value as { name?: unknown }).name ??
-      (value as { value?: unknown }).value ??
-      (value as { text?: unknown }).text ??
-      (value as { label?: unknown }).label ??
-      null;
-    if (source != null) {
-      return extractLookupText(source);
-    }
-  }
-  return null;
-}
-
-function pickFirstString(fields: SessionFields, fieldNames: string[]): string | null {
-  for (const fieldName of fieldNames) {
-    const value = getFieldValue(fields, fieldName);
-    const str = extractLookupText(value);
-    if (str) {
-      return str;
-    }
-  }
-  return null;
-}
-
-function firstId(value: unknown): string | null {
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      if (typeof entry === 'string' && entry.trim()) {
-        return entry.trim();
-      }
-    }
-    return null;
-  }
-  if (typeof value === 'string' && value.trim()) {
-    return value.trim();
-  }
-  return null;
-}
-
-function extractUserName(fields: SessionFields): string | null {
-  const direct = pickFirstString(fields, [
-    'name (from user)',
-    'user name',
-    'userName',
-    'username',
-    'ユーザー名',
-    'ユーザー名 (from user)',
-    'display name',
-    'displayName',
-  ]);
-  if (direct) {
-    return direct;
-  }
-
-  for (const [key, value] of Object.entries(fields)) {
-    if (typeof value !== 'string') {
       continue;
     }
-    const normalizedKey = normalizeFieldKey(key);
-    if (normalizedKey.includes('user') && normalizedKey.includes('name')) {
-      const candidate = asString(value);
-      if (candidate) {
-        return candidate;
-      }
-    }
-    if (normalizedKey.includes('user') && normalizedKey.includes('display')) {
-      const candidate = asString(value);
-      if (candidate) {
-        return candidate;
-      }
-    }
+    const text = asString(value);
+    if (text) return text;
   }
   return null;
 }
 
-function toSessionRow(record: RawSessionRecord): AttendanceSession | null {
-  const fields = record.fields ?? {};
-  const date = asString(getFieldValue(fields, 'date'));
-  const start = pickFirstString(fields, ['start', 'start (JST)']);
-  const end = pickFirstString(fields, ['end', 'end (JST)']);
-  const durationMin = asNumber(getFieldValue(fields, 'durationMin'));
-  const siteName = pickFirstString(fields, ['siteName', 'site name', 'site Name']);
-  const workDescription = pickFirstString(fields, [
-    'workDescription',
-    'work description',
-    'workDescription (from work)',
-    'description (from work)',
-  ]);
+function toSessionRow(payload: Record<string, unknown>): AttendanceSession | null {
+  const fields =
+    payload.fields && typeof payload.fields === 'object' && !Array.isArray(payload.fields)
+      ? (payload.fields as Record<string, unknown>)
+      : payload;
 
-  const userField = getFieldValue(fields, 'user');
-  const rawUserId = asNumber(userField);
-  const userRecordId = firstId(userField);
-  const userName = extractUserName(fields);
-
-  const machineIdValue = pickFirstString(fields, [
-    'machineId',
-    'machine id',
-    'machineid',
-  ]);
-  const machineIdNumber =
-    asNumber(getFieldValue(fields, 'machineId'));
-  const machineId = machineIdValue ?? (machineIdNumber != null ? String(machineIdNumber) : null);
-  const machineName = pickFirstString(fields, [
-    'machineName',
-    'machine name',
-    'machinename',
-  ]);
-
-  const status = pickFirstString(fields, ['status']);
+  const date = asString(fields.date);
+  const start = readFirstString(fields, ['start', 'start (JST)']);
+  const end = readFirstString(fields, ['end', 'end (JST)']);
+  const durationMin = asNumber(fields.durationMin);
+  const siteName = readFirstString(fields, ['siteName', 'site name', 'site']);
+  const workDescription = readFirstString(fields, ['workDescription', 'work description']);
+  const userRecordId = Array.isArray(fields.user) ? asString(fields.user[0]) : asString(fields.userRecordId);
+  const userId = asNumber(fields.userId ?? fields.user);
+  const userName = readFirstString(fields, ['name (from user)', 'userName', 'username', 'name']);
+  const machineId = readFirstString(fields, ['machineId', 'machineid', 'machineId (from machine)']);
+  const machineName = readFirstString(fields, ['machineName', 'machinename', 'machineName (from machine)']);
+  const status = asString(fields.status);
 
   const startMs = start ? Date.parse(start) : Number.NaN;
   const endMs = end ? Date.parse(end) : Number.NaN;
@@ -209,215 +100,62 @@ function toSessionRow(record: RawSessionRecord): AttendanceSession | null {
       : null;
 
   return {
-    id: record.id,
+    id: asString(fields.id) ?? asString(payload.id) ?? `${date ?? 'session'}-${normalizedStartMs ?? 0}`,
     date,
-    start: start ?? null,
-    end: end ?? null,
+    start,
+    end,
     startMs: normalizedStartMs,
     endMs: normalizedEndMs,
     durationMin: durationMin ?? computedDuration,
     siteName,
     workDescription,
-    userId: rawUserId,
+    userId,
     userRecordId,
     userName,
     machineId,
     machineName,
     status,
-  } satisfies AttendanceSession;
+  };
 }
 
 function normalizeText(value: string | null | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-  return value.trim().toLocaleLowerCase('ja');
-}
-
-function escapeFormulaValue(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
-function buildFilterFormula(query: AttendanceSessionQuery): string {
-  const clauses: string[] = [];
-  clauses.push(`{date} >= "${escapeFormulaValue(query.startDate)}"`);
-  clauses.push(`{date} <= "${escapeFormulaValue(query.endDate)}"`);
-
-  if (query.userId != null) {
-    clauses.push(`{user} = ${Math.round(query.userId)}`);
-  }
-  if (query.siteName) {
-    clauses.push(`{siteName} = "${escapeFormulaValue(query.siteName)}"`);
-  }
-  if (query.machineId) {
-    clauses.push(`{machineId} = "${escapeFormulaValue(String(query.machineId))}"`);
-  }
-
-  if (clauses.length === 1) {
-    return clauses[0];
-  }
-  return `AND(${clauses.join(',')})`;
-}
-
-async function fetchUserHydrationMap(recordIds: string[]): Promise<Map<string, { name: string | null; userId: number | null }>> {
-  const map = new Map<string, { name: string | null; userId: number | null }>();
-  if (recordIds.length === 0) {
-    return map;
-  }
-
-  const uniqueIds = Array.from(new Set(recordIds));
-  const batches: string[][] = [];
-  for (let index = 0; index < uniqueIds.length; index += 15) {
-    batches.push(uniqueIds.slice(index, index + 15));
-  }
-
-  for (const batch of batches) {
-    const formula = batch
-      .map((id) => `RECORD_ID()='${escapeFormulaValue(id)}'`)
-      .reduce((acc, clause) => (acc ? `${acc},${clause}` : clause), '');
-    const filterByFormula = batch.length === 1 ? formula : `OR(${formula})`;
-    const records = await withRetry(() =>
-      usersTable
-        .select({
-          filterByFormula,
-          fields: ['name', 'username', 'userId'],
-        })
-        .all(),
-    );
-
-    for (const record of records) {
-      const fields = record.fields as Partial<UserFields> | undefined;
-      const name = asString(fields?.name) ?? asString(fields?.username) ?? null;
-      const userId = asNumber(fields?.userId);
-      map.set(record.id, { name, userId });
-    }
-  }
-
-  return map;
-}
-
-async function hydrateUserRows(rows: AttendanceSession[]): Promise<void> {
-  const needsHydration = rows.filter((row) => {
-    if (!row.userRecordId) {
-      return false;
-    }
-    const missingName = !row.userName || row.userName.trim().length === 0;
-    const missingUserId = row.userId == null || !Number.isFinite(row.userId);
-    return missingName || missingUserId;
-  });
-
-  if (needsHydration.length === 0) {
-    return;
-  }
-
-  const recordIds = needsHydration
-    .map((row) => row.userRecordId)
-    .filter((id): id is string => typeof id === 'string' && id.length > 0);
-
-  const hydrationMap = await fetchUserHydrationMap(recordIds);
-
-  for (const row of needsHydration) {
-    if (!row.userRecordId) {
-      continue;
-    }
-    const hydration = hydrationMap.get(row.userRecordId);
-    if (!hydration) {
-      continue;
-    }
-    if ((!row.userName || row.userName.trim().length === 0) && hydration.name) {
-      row.userName = hydration.name;
-    }
-    if ((row.userId == null || !Number.isFinite(row.userId)) && hydration.userId != null) {
-      row.userId = hydration.userId;
-    }
-  }
+  return value ? value.trim().toLocaleLowerCase('ja') : null;
 }
 
 function matchesQuery(row: AttendanceSession, query: AttendanceSessionQuery): boolean {
-  if (query.userId != null && row.userId !== query.userId) {
-    return false;
-  }
+  if (query.userId != null && row.userId !== query.userId) return false;
   if (query.siteName) {
     const expected = normalizeText(query.siteName);
     const actual = normalizeText(row.siteName);
-    if (expected && actual && expected !== actual) {
-      return false;
-    }
+    if (expected && actual && expected !== actual) return false;
   }
   if (query.machineId) {
-    const expected = normalizeText(String(query.machineId));
+    const expected = normalizeText(query.machineId);
     const actual = normalizeText(row.machineId);
-    if (expected && actual && expected !== actual) {
-      return false;
-    }
+    if (expected && actual && expected !== actual) return false;
   }
   return true;
 }
 
-/**
- * Sessionsテーブルから勤怠集計に必要なセッション一覧を取得する。
- */
-export async function fetchAttendanceSessions(query: AttendanceSessionQuery): Promise<AttendanceSession[]> {
-  const filterByFormula = buildFilterFormula(query);
-  let records: Awaited<ReturnType<typeof listRecords<SessionFields>>>;
-  try {
-    records = await listRecords<SessionFields>({
-      table: SESSIONS_TABLE,
-      filterByFormula,
-      fields: [
-        'date',
-        'start',
-        'end',
-        'durationMin',
-        'siteName',
-        'user',
-        'name (from user)',
-        'machineId',
-        'machine',
-        'machineName',
-        'workDescription',
-        'status',
-      ],
-      sort: [
-        { field: 'date', direction: 'asc' },
-        { field: 'start', direction: 'asc' },
-      ],
-    });
-  } catch (error) {
-    if (error instanceof AirtableError) {
-      let message = error.message;
-      try {
-        const parsed = JSON.parse(error.message) as { error?: { message?: string } };
-        if (parsed?.error?.message) {
-          message = parsed.error.message;
-        }
-      } catch {
-        // keep original message
-      }
-      console.error('[attendance] AirtableError', {
-        status: error.status,
-        message,
-        filterByFormula,
-      });
-    }
-    throw error;
-  }
+export async function fetchAttendanceSessions(queryParams: AttendanceSessionQuery): Promise<AttendanceSession[]> {
+  const result = await query<SessionPayloadRow>(
+    `
+      SELECT to_jsonb(s) AS payload
+      FROM sessions s
+      WHERE COALESCE(to_jsonb(s)->>'date', '') >= $1
+        AND COALESCE(to_jsonb(s)->>'date', '') <= $2
+      ORDER BY
+        COALESCE(to_jsonb(s)->>'date', '') ASC,
+        COALESCE(to_jsonb(s)->>'start', '') ASC,
+        COALESCE(to_jsonb(s)->>'id', '') ASC
+    `,
+    [queryParams.startDate, queryParams.endDate],
+  );
 
-  const rows = records
-    .map((record) => toSessionRow(record as RawSessionRecord))
-    .filter((row): row is AttendanceSession => row !== null && row.date !== null);
+  const rows = result.rows
+    .map((row) => toSessionRow(row.payload))
+    .filter((row): row is AttendanceSession => row !== null && row.date !== null)
+    .filter((row) => matchesQuery(row, queryParams));
 
-  await hydrateUserRows(rows);
-
-  const filtered = rows.filter((row) => matchesQuery(row, query));
-  return filtered.sort((a, b) => {
-    const dateA = a.date ?? '';
-    const dateB = b.date ?? '';
-    if (dateA !== dateB) {
-      return dateA.localeCompare(dateB);
-    }
-    const startA = a.startMs ?? Number.POSITIVE_INFINITY;
-    const startB = b.startMs ?? Number.POSITIVE_INFINITY;
-    return startA - startB;
-  });
+  return rows;
 }
