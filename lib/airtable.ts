@@ -7,6 +7,7 @@ import {
   LogFields,
 } from '@/types';
 import { logger } from './logger';
+import { getAirtableEnv } from './airtable/env';
 
 export async function withRetry<T>(
   fn: () => Promise<T>,
@@ -36,28 +37,28 @@ export const LOGS_TABLE = 'Logs';
 export const MACHINES_TABLE = 'Machines';
 export const WORKTYPES_TABLE = 'WorkTypes';
 
-const apiKey = process.env.AIRTABLE_API_KEY;
-const baseId = process.env.AIRTABLE_BASE_ID;
+let cachedBase: ReturnType<Airtable['base']> | null = null;
 
-if (!apiKey || !baseId) {
-  throw new Error(
-    [
-      'Airtable env missing.',
-      `AIRTABLE_API_KEY=${apiKey ? '[set]' : '[missing]'}`,
-      `AIRTABLE_BASE_ID=${baseId ? '[set]' : '[missing]'}`,
-    ].join(' ')
-  );
-}
-
-export const base = new Airtable({ apiKey }).base(baseId);
+export const base = ((tableName: string) => getBase()(tableName)) as ReturnType<Airtable['base']>;
 
 export function getBase() {
-  return base;
+  if (cachedBase) {
+    return cachedBase;
+  }
+  const { apiKey, baseId } = getAirtableEnv();
+  cachedBase = new Airtable({ apiKey }).base(baseId);
+  return cachedBase;
 }
 
 // 型付けされたテーブルを返すヘルパー関数
 const getTypedTable = <T extends FieldSet>(tableName: string): Table<T> => {
-  return base(tableName);
+  return new Proxy({} as Table<T>, {
+    get(_target, prop) {
+      const table = getBase()(tableName) as unknown as Record<string | symbol, unknown>;
+      const value = table[prop];
+      return typeof value === 'function' ? value.bind(table) : value;
+    },
+  });
 };
 
 // 各テーブルをエクスポート

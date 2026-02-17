@@ -1,17 +1,26 @@
 import { usersTable, withRetry } from '@/lib/airtable';
 import type { UserFields } from '@/types';
+import { getAirtableEnv } from '@/lib/airtable/env';
 
-const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
-const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
+type AirtableSessionConfig = {
+  apiKey: string;
+  apiBase: string;
+};
 
-if (!AIRTABLE_API_KEY) {
-  throw new Error('AIRTABLE_API_KEY is not set');
+let cachedAirtableSessionConfig: AirtableSessionConfig | null = null;
+
+function getAirtableSessionConfig(): AirtableSessionConfig {
+  if (cachedAirtableSessionConfig) {
+    return cachedAirtableSessionConfig;
+  }
+  const { apiKey, baseId } = getAirtableEnv();
+  cachedAirtableSessionConfig = {
+    apiKey,
+    apiBase: `https://api.airtable.com/v0/${baseId}`,
+  };
+  return cachedAirtableSessionConfig;
 }
-if (!AIRTABLE_BASE_ID) {
-  throw new Error('AIRTABLE_BASE_ID is not set');
-}
 
-const API_BASE = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}`;
 const SESSIONS_TABLE = 'Sessions';
 const PAGE_SIZE = 100;
 const MAX_RETRY = 3;
@@ -123,7 +132,8 @@ export type SessionReportQuery = {
 };
 
 function buildUrl(offset?: string): string {
-  const url = new URL(`${API_BASE}/${encodeURIComponent(SESSIONS_TABLE)}`);
+  const { apiBase } = getAirtableSessionConfig();
+  const url = new URL(`${apiBase}/${encodeURIComponent(SESSIONS_TABLE)}`);
   url.searchParams.set('pageSize', String(PAGE_SIZE));
   if (offset) {
     url.searchParams.set('offset', offset);
@@ -132,7 +142,8 @@ function buildUrl(offset?: string): string {
 }
 
 async function fetchPage(url: string, attempt = 0): Promise<AirtableListResponse> {
-  const headers = { Authorization: `Bearer ${AIRTABLE_API_KEY}` };
+  const { apiKey } = getAirtableSessionConfig();
+  const headers = { Authorization: `Bearer ${apiKey}` };
   const response = await fetch(url, {
     headers,
     cache: 'no-store',

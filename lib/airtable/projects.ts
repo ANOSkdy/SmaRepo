@@ -1,5 +1,6 @@
 import Airtable, { FieldSet, Record as AirtableRecord, Records } from 'airtable';
 import { sitesTable } from '@/lib/airtable';
+import { getAirtableEnv } from '@/lib/airtable/env';
 import type { SiteFields } from '@/types';
 
 type AirtableSortDirection = 'asc' | 'desc';
@@ -41,14 +42,17 @@ export interface GetDashboardProjectsResult {
 }
 
 const PROJECTS_TABLE = process.env.AIRTABLE_TABLE_PROJECTS || 'Projects';
-const apiKey = process.env.AIRTABLE_API_KEY;
-const baseId = process.env.AIRTABLE_BASE_ID;
 
-if (!apiKey || !baseId) {
-  throw new Error('Airtable credentials are not configured');
+let cachedBase: ReturnType<Airtable['base']> | null = null;
+
+function getProjectsBase() {
+  if (cachedBase) {
+    return cachedBase;
+  }
+  const { apiKey, baseId } = getAirtableEnv();
+  cachedBase = new Airtable({ apiKey }).base(baseId);
+  return cachedBase;
 }
-
-const base = new Airtable({ apiKey }).base(baseId);
 
 async function withRetry<T>(factory: () => Promise<T>, retries = 3, delay = 500): Promise<T> {
   try {
@@ -151,7 +155,7 @@ export async function getDashboardProjects(
   const sortDirection: AirtableSortDirection = params.order === 'asc' ? 'asc' : 'desc';
 
   const records = await withRetry(() =>
-    base<ProjectFields>(PROJECTS_TABLE)
+    getProjectsBase()<ProjectFields>(PROJECTS_TABLE)
       .select({
         filterByFormula,
         sort: sortField ? [{ field: sortField, direction: sortDirection }] : undefined,
@@ -184,7 +188,7 @@ export async function getProjectsForSiteIds(siteIds: readonly string[]): Promise
     .map((id) => `FIND('${escapeAirtableFormula(id)}', ARRAYJOIN({site}))`)
     .join(',')})`;
   return withRetry(() =>
-    base<ProjectFields>(PROJECTS_TABLE)
+    getProjectsBase()<ProjectFields>(PROJECTS_TABLE)
       .select({
         filterByFormula: filter,
         pageSize: 100,
