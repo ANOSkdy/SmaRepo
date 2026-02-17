@@ -1,4 +1,3 @@
-import { Record as AirtableRecord } from 'airtable';
 import { logsTable, withRetry } from '@/lib/airtable';
 import { LOG_FIELDS } from '@/lib/airtable/schema';
 import type { LogFields } from '@/types';
@@ -7,7 +6,10 @@ import { normalizeDailyMinutes } from '@/src/lib/timecalc';
 
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
-type LogRecord = AirtableRecord<LogFields>;
+type LogRecord = {
+  id: string;
+  fields: LogFields & Record<string, unknown>;
+};
 
 type EnrichedLog = {
   record: LogRecord;

@@ -1,10 +1,11 @@
-import type { FieldSet, Record as AirtableRecord } from 'airtable';
 import type { LogFields } from '@/types';
 
-type AirtableLikeRecord =
-  | { fields?: Record<string, unknown> }
-  | AirtableRecord<FieldSet>
-  | AirtableRecord<LogFields>;
+type DataRecord<TFields extends Record<string, unknown> = Record<string, unknown>> = {
+  id?: string;
+  fields?: TFields;
+};
+
+type AirtableLikeRecord = DataRecord | DataRecord<LogFields>;
 
 type Identity = {
   employeeCode?: string;
