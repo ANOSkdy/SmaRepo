@@ -104,7 +104,9 @@ test('month API returns 401 when unauthenticated', async () => {
   const { GET } = await importRouteWith({ auth: authMock, getLogs: getLogsMock });
   const response = await GET(new Request('https://example.com/api/calendar/month?year=2025&month=9'));
   assert.strictEqual(response.status, 401);
-  assert.deepStrictEqual(await response.json(), { message: 'unauthorized' });
+  const body = await response.json();
+  assert.strictEqual(body.message, 'unauthorized');
+  assert.match(body.errorId, /^[a-z0-9]{10}$/i);
   assert.strictEqual(getLogsMock.mock.calls.length, 0);
 });
 
@@ -113,7 +115,9 @@ test('month API returns 400 when params are invalid', async () => {
   const { GET } = await importRouteWith({ auth: authMock, getLogs: mock.fn(async () => []) });
   const response = await GET(new Request('https://example.com/api/calendar/month?year=&month='));
   assert.strictEqual(response.status, 400);
-  assert.deepStrictEqual(await response.json(), { error: 'INVALID_QUERY' });
+  const body = await response.json();
+  assert.strictEqual(body.error, 'INVALID_QUERY');
+  assert.match(body.errorId, /^[a-z0-9]{10}$/i);
 });
 
 test('month API returns 500 when DB query fails', async () => {
@@ -124,7 +128,10 @@ test('month API returns 500 when DB query fails', async () => {
   const { GET } = await importRouteWith({ auth: authMock, getLogs: getLogsMock });
   const response = await GET(new Request('https://example.com/api/calendar/month?year=2025&month=9'));
   assert.strictEqual(response.status, 500);
-  assert.deepStrictEqual(await response.json(), { ok: false, error: 'DB query failed' });
+  const body = await response.json();
+  assert.strictEqual(body.ok, false);
+  assert.strictEqual(body.error, 'Calendar fetch failed');
+  assert.match(body.errorId, /^[a-z0-9]{10}$/i);
 });
 
 test('month API aggregates punches and sessions', async () => {

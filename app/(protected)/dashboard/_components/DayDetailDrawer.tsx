@@ -25,6 +25,10 @@ type DayDetailResponse = {
   sessions: SessionRecord[];
 };
 
+type ApiErrorPayload = {
+  errorId?: string;
+};
+
 type FetchState = 'idle' | 'loading' | 'success' | 'error';
 
 type DayDetailDrawerProps = {
@@ -80,7 +84,11 @@ export default function DayDetailDrawer({ date, open, onClose }: DayDetailDrawer
           signal: controller.signal,
         });
         if (!response.ok) {
-          throw new Error(`Day API error: ${response.status}`);
+          const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+          const detail = payload?.errorId ? ` errorId: ${payload.errorId}` : '';
+          setErrorMessage(`Failed to load (status ${response.status})${detail}`);
+          setState('error');
+          return;
         }
         const payload = (await response.json()) as DayDetailResponse;
         setDetail(payload);
@@ -90,7 +98,7 @@ export default function DayDetailDrawer({ date, open, onClose }: DayDetailDrawer
           return;
         }
         console.error('Failed to load day detail', error);
-        setErrorMessage('日次の打刻情報を取得できませんでした。時間を置いて再試行してください。');
+        setErrorMessage('Failed to load (status network)');
         setState('error');
       }
     };

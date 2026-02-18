@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { hasDatabaseUrl } from '@/lib/server-env';
 import { getLogsBetween, summariseMonth } from '@/lib/calendar/neon';
+import { logEvent, newErrorId, toErrorMeta } from '@/lib/diagnostics';
 
 export const runtime = 'nodejs';
 
@@ -29,26 +30,62 @@ function buildMonthRange(year: number, month: number) {
 }
 
 export async function GET(req: NextRequest) {
+  const errorId = newErrorId();
+  const startedAt = Date.now();
   const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
-  }
+  const userId = session?.user?.id ?? null;
 
   const parsed = parseYearMonth(req);
+  logEvent('info', 'calendar_month_request', {
+    errorId,
+    year: parsed?.year ?? null,
+    month: parsed?.month ?? null,
+    userId,
+    auth: userId ? 'ok' : 'missing',
+  });
+
+  if (!userId) {
+    logEvent('warn', 'calendar_month_unauthorized', { errorId });
+    return NextResponse.json({ message: 'unauthorized', errorId }, { status: 401 });
+  }
+
   if (!parsed) {
-    return NextResponse.json({ error: 'INVALID_QUERY' }, { status: 400 });
+    logEvent('warn', 'calendar_month_invalid_query', { errorId });
+    return NextResponse.json({ error: 'INVALID_QUERY', errorId }, { status: 400 });
   }
 
   if (!hasDatabaseUrl()) {
-    return NextResponse.json({ ok: false, error: 'DB env missing' }, { status: 500 });
+    logEvent('error', 'calendar_month_db_env_missing', {
+      errorId,
+      year: parsed.year,
+      month: parsed.month,
+    });
+    return NextResponse.json({ ok: false, error: 'Calendar fetch failed', errorId }, { status: 500 });
   }
 
   try {
     const range = buildMonthRange(parsed.year, parsed.month);
     const logs = await getLogsBetween({ fromDate: range.start, toDateExclusive: range.endExclusive });
     const days = summariseMonth(logs);
+    logEvent('info', 'calendar_month_success', {
+      errorId,
+      year: parsed.year,
+      month: parsed.month,
+      fromDate: range.start,
+      toDateExclusive: range.endExclusive,
+      logCount: logs.length,
+      dayCount: days.length,
+      durationMs: Date.now() - startedAt,
+    });
     return NextResponse.json({ year: parsed.year, month: parsed.month, days: days ?? [] });
-  } catch {
-    return NextResponse.json({ ok: false, error: 'DB query failed' }, { status: 500 });
+  } catch (error) {
+    logEvent('error', 'calendar_month_error', {
+      errorId,
+      year: parsed.year,
+      month: parsed.month,
+      durationMs: Date.now() - startedAt,
+      ...toErrorMeta(error),
+    });
+    return NextResponse.json({ ok: false, error: 'Calendar fetch failed', errorId }, { status: 500 });
   }
 }

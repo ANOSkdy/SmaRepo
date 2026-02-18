@@ -19,6 +19,10 @@ type CalendarResponse = {
   days: CalendarDay[];
 };
 
+type ApiErrorPayload = {
+  errorId?: string;
+};
+
 const JST_OFFSET = 9 * 60 * 60 * 1000;
 
 function getTodayInfo() {
@@ -79,9 +83,11 @@ export default function ActivityCalendar() {
   const [data, setData] = useState<CalendarResponse | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const fetchCalendar = useCallback(async () => {
     setIsLoading(true);
+    setErrorMessage(null);
     try {
       const params = new URLSearchParams({ year: String(year), month: String(month) });
       const response = await fetch(`/api/calendar/month?${params.toString()}`, {
@@ -90,13 +96,16 @@ export default function ActivityCalendar() {
         credentials: 'same-origin',
       });
       if (!response.ok) {
-        const message = await response.text().catch(() => '');
-        console.error('Failed to load calendar summary: HTTP error', response.status, message);
-        setData({ year, month, days: [] });
+        const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+        const detail = payload?.errorId ? ` errorId: ${payload.errorId}` : '';
+        console.error('Failed to load calendar summary: HTTP error', response.status, payload);
+        setErrorMessage(`Failed to load (status ${response.status})${detail}`);
+        setData(null);
         setSelectedDate(null);
         return;
       }
       const payload = (await response.json()) as Partial<CalendarResponse> | null;
+      setErrorMessage(null);
       const days = Array.isArray(payload?.days) ? payload.days : [];
       setData({
         year: typeof payload?.year === 'number' ? payload.year : year,
@@ -105,7 +114,8 @@ export default function ActivityCalendar() {
       });
     } catch (error) {
       console.error('Failed to load calendar summary', error);
-      setData({ year, month, days: [] });
+      setErrorMessage('Failed to load (status network)');
+      setData(null);
       setSelectedDate(null);
     } finally {
       setIsLoading(false);
@@ -149,6 +159,11 @@ export default function ActivityCalendar() {
       {isLoading && (
         <div className="rounded-2xl border border-brand-border bg-brand-surface-alt px-4 py-3 text-sm text-brand-muted">
           読み込み中…
+        </div>
+      )}
+      {errorMessage && (
+        <div className="rounded-lg border border-brand-error/40 bg-brand-surface-alt px-4 py-3 text-sm text-brand-error" role="alert">
+          {errorMessage}
         </div>
       )}
       {!isLoading && data && (
