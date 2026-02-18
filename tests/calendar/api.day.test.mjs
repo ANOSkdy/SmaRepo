@@ -104,7 +104,9 @@ test('day API requires authentication', async () => {
   const { GET } = await importRouteWith({ auth: authMock, getLogs: getLogsMock });
   const response = await GET(new Request('https://example.com/api/calendar/day?date=2025-09-01'));
   assert.strictEqual(response.status, 401);
-  assert.deepStrictEqual(await response.json(), { error: 'UNAUTHORIZED' });
+  const body = await response.json();
+  assert.strictEqual(body.error, 'UNAUTHORIZED');
+  assert.match(body.errorId, /^[a-z0-9]{10}$/i);
   assert.strictEqual(getLogsMock.mock.calls.length, 0);
 });
 
@@ -113,7 +115,9 @@ test('day API validates date format', async () => {
   const { GET } = await importRouteWith({ auth: authMock, getLogs: mock.fn(async () => []) });
   const response = await GET(new Request('https://example.com/api/calendar/day?date=2025/09/01'));
   assert.strictEqual(response.status, 400);
-  assert.deepStrictEqual(await response.json(), { error: 'INVALID_DATE' });
+  const body = await response.json();
+  assert.strictEqual(body.error, 'INVALID_DATE');
+  assert.match(body.errorId, /^[a-z0-9]{10}$/i);
 });
 
 test('day API returns paired sessions without punches detail', async () => {

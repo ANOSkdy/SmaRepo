@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { hasDatabaseUrl } from '@/lib/server-env';
 import { buildDayDetail, getLogsBetween } from '@/lib/calendar/neon';
+import { logEvent, newErrorId, toErrorMeta } from '@/lib/diagnostics';
 
 export const runtime = 'nodejs';
 
-function errorResponse(code: string, status: number) {
-  return NextResponse.json({ error: code }, { status });
+function errorResponse(code: string, status: number, errorId: string) {
+  return NextResponse.json({ error: code, errorId }, { status });
 }
 
 function isValidDateString(date: string): boolean {
@@ -65,18 +66,37 @@ function normalizeMachineId(value: unknown): string | null {
 }
 
 export async function GET(req: NextRequest) {
+  const errorId = newErrorId();
+  const startedAt = Date.now();
   const session = await auth();
-  if (!session?.user?.id) {
-    return errorResponse('UNAUTHORIZED', 401);
-  }
+  const userId = session?.user?.id ?? null;
 
   const { searchParams } = new URL(req.url);
   const date = searchParams.get('date');
-  if (!date) return errorResponse('MISSING_DATE', 400);
-  if (!isValidDateString(date)) return errorResponse('INVALID_DATE', 400);
+  logEvent('info', 'calendar_day_request', {
+    errorId,
+    date,
+    userId,
+    auth: userId ? 'ok' : 'missing',
+  });
+
+  if (!userId) {
+    logEvent('warn', 'calendar_day_unauthorized', { errorId, date });
+    return errorResponse('UNAUTHORIZED', 401, errorId);
+  }
+
+  if (!date) {
+    logEvent('warn', 'calendar_day_missing_date', { errorId });
+    return errorResponse('MISSING_DATE', 400, errorId);
+  }
+  if (!isValidDateString(date)) {
+    logEvent('warn', 'calendar_day_invalid_date', { errorId, date });
+    return errorResponse('INVALID_DATE', 400, errorId);
+  }
 
   if (!hasDatabaseUrl()) {
-    return NextResponse.json({ ok: false, error: 'DB env missing' }, { status: 500 });
+    logEvent('error', 'calendar_day_db_env_missing', { errorId, date });
+    return NextResponse.json({ ok: false, error: 'Calendar fetch failed', errorId }, { status: 500 });
   }
 
   try {
@@ -142,8 +162,22 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    logEvent('info', 'calendar_day_success', {
+      errorId,
+      date,
+      logCount: logs.length,
+      sessionCount: sessionsWithLookup.length,
+      durationMs: Date.now() - startedAt,
+    });
+
     return NextResponse.json({ date, sessions: sessionsWithLookup });
-  } catch {
-    return errorResponse('INTERNAL_ERROR', 500);
+  } catch (error) {
+    logEvent('error', 'calendar_day_error', {
+      errorId,
+      date,
+      durationMs: Date.now() - startedAt,
+      ...toErrorMeta(error),
+    });
+    return NextResponse.json({ ok: false, error: 'Calendar fetch failed', errorId }, { status: 500 });
   }
 }
