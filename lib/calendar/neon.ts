@@ -283,13 +283,21 @@ export async function getLogsBetween(params: {
 }): Promise<NormalizedLog[]> {
   const result = await query<LogPayloadRow>(
     `
-      SELECT to_jsonb(l) AS payload
-      FROM logs l
-      WHERE COALESCE(to_jsonb(l)->>'date', '') >= $1
-        AND COALESCE(to_jsonb(l)->>'date', '') < $2
+      WITH logs_with_keys AS (
+        SELECT
+          to_jsonb(l) AS payload,
+          COALESCE(to_jsonb(l)->>'date', '') AS date_key,
+          COALESCE(to_jsonb(l)->>'timestamp', '') AS timestamp_key,
+          COALESCE(to_jsonb(l)->>'id', '') AS id_key
+        FROM logs l
+      )
+      SELECT payload
+      FROM logs_with_keys
+      WHERE date_key >= $1
+        AND date_key < $2
       ORDER BY
-        COALESCE(to_jsonb(l)->>'timestamp', '') ASC,
-        COALESCE(to_jsonb(l)->>'id', '') ASC
+        timestamp_key ASC,
+        id_key ASC
     `,
     [params.fromDate, params.toDateExclusive],
   );

@@ -41,6 +41,11 @@ export type SessionReportQuery = {
 
 type SessionPayloadRow = { payload: Record<string, unknown> };
 
+type SqlCondition = {
+  clause: string;
+  value: string | number;
+};
+
 function asString(value: unknown): string | null {
   if (typeof value === 'string') {
     const trimmed = value.trim();
@@ -182,15 +187,79 @@ function matchesQuery(row: SessionReportRow, q?: SessionReportQuery): boolean {
 }
 
 export async function fetchSessionReportRows(queryParams?: SessionReportQuery): Promise<SessionReportRow[]> {
+  const conditions: SqlCondition[] = [];
+  const hasYear = toNumber(queryParams?.year) != null;
+  const hasMonth = toNumber(queryParams?.month) != null;
+  const hasDay = toNumber(queryParams?.day) != null;
+
+  if (hasYear && hasMonth) {
+    const year = toNumber(queryParams?.year)!;
+    const month = toNumber(queryParams?.month)!;
+    const startDate = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-01`;
+    const end = new Date(Date.UTC(year, month, 1));
+    const endDate = `${end.getUTCFullYear()}-${String(end.getUTCMonth() + 1).padStart(2, '0')}-01`;
+    conditions.push({ clause: `COALESCE(to_jsonb(s)->>'date', '') >= $${conditions.length + 1}`, value: startDate });
+    conditions.push({ clause: `COALESCE(to_jsonb(s)->>'date', '') < $${conditions.length + 1}`, value: endDate });
+  } else {
+    if (hasYear) {
+      conditions.push({
+        clause: `COALESCE(split_part(COALESCE(to_jsonb(s)->>'date', ''), '-', 1), '') = $${conditions.length + 1}`,
+        value: String(toNumber(queryParams?.year)!).padStart(4, '0'),
+      });
+    }
+    if (hasMonth) {
+      conditions.push({
+        clause: `COALESCE(split_part(COALESCE(to_jsonb(s)->>'date', ''), '-', 2), '') = $${conditions.length + 1}`,
+        value: String(toNumber(queryParams?.month)!).padStart(2, '0'),
+      });
+    }
+  }
+
+  if (hasDay) {
+    conditions.push({
+      clause: `COALESCE(split_part(COALESCE(to_jsonb(s)->>'date', ''), '-', 3), '') = $${conditions.length + 1}`,
+      value: String(toNumber(queryParams?.day)!).padStart(2, '0'),
+    });
+  }
+
+  const normalizedUserId = toNumber(queryParams?.userId);
+  if (normalizedUserId != null) {
+    conditions.push({
+      clause: `COALESCE(to_jsonb(s)->>'userId', to_jsonb(s)->>'user', '') = $${conditions.length + 1}`,
+      value: String(normalizedUserId),
+    });
+  }
+
+  if (queryParams?.siteId) {
+    conditions.push({
+      clause: `COALESCE(to_jsonb(s)->'site'->>0, to_jsonb(s)->>'siteRecordId', '') = $${conditions.length + 1}`,
+      value: queryParams.siteId,
+    });
+  }
+
+  if (queryParams?.machineId) {
+    conditions.push({
+      clause: `COALESCE(to_jsonb(s)->>'machineId', to_jsonb(s)->>'machineid', to_jsonb(s)->'machine'->>0, '') = $${conditions.length + 1}`,
+      value: String(queryParams.machineId),
+    });
+  }
+
+  const whereClause =
+    conditions.length > 0
+      ? `WHERE ${conditions.map((condition) => condition.clause).join('\n        AND ')}`
+      : '';
+
   const result = await query<SessionPayloadRow>(
     `
       SELECT to_jsonb(s) AS payload
       FROM sessions s
+      ${whereClause}
       ORDER BY
         COALESCE(to_jsonb(s)->>'date', '') ASC,
         COALESCE(to_jsonb(s)->>'start', '') ASC,
         COALESCE(to_jsonb(s)->>'id', '') ASC
     `,
+    conditions.map((condition) => condition.value),
   );
 
   return result.rows
