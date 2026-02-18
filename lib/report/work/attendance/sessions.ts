@@ -33,6 +33,11 @@ type SessionPayloadRow = {
   payload: Record<string, unknown>;
 };
 
+type SqlCondition = {
+  clause: string;
+  value: string | number;
+};
+
 function asString(value: unknown): string | null {
   if (typeof value === 'string') {
     const trimmed = value.trim();
@@ -138,18 +143,29 @@ function matchesQuery(row: AttendanceSession, query: AttendanceSessionQuery): bo
 }
 
 export async function fetchAttendanceSessions(queryParams: AttendanceSessionQuery): Promise<AttendanceSession[]> {
+  const conditions: SqlCondition[] = [
+    { clause: `COALESCE(to_jsonb(s)->>'date', '') >= $1`, value: queryParams.startDate },
+    { clause: `COALESCE(to_jsonb(s)->>'date', '') <= $2`, value: queryParams.endDate },
+  ];
+
+  if (queryParams.userId != null) {
+    conditions.push({
+      clause: `COALESCE(to_jsonb(s)->>'userId', to_jsonb(s)->>'user', '') = $${conditions.length + 1}`,
+      value: String(queryParams.userId),
+    });
+  }
+
   const result = await query<SessionPayloadRow>(
     `
       SELECT to_jsonb(s) AS payload
       FROM sessions s
-      WHERE COALESCE(to_jsonb(s)->>'date', '') >= $1
-        AND COALESCE(to_jsonb(s)->>'date', '') <= $2
+      WHERE ${conditions.map((condition) => condition.clause).join('\n        AND ')}
       ORDER BY
         COALESCE(to_jsonb(s)->>'date', '') ASC,
         COALESCE(to_jsonb(s)->>'start', '') ASC,
         COALESCE(to_jsonb(s)->>'id', '') ASC
     `,
-    [queryParams.startDate, queryParams.endDate],
+    conditions.map((condition) => condition.value),
   );
 
   const rows = result.rows

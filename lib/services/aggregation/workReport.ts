@@ -7,6 +7,7 @@ type LogPayloadRow = {
   payload: Record<string, unknown>;
 };
 
+
 type EnrichedLog = {
   id: string;
   type: 'IN' | 'OUT';
@@ -132,24 +133,43 @@ export async function getWorkReportByMonth(params: {
   const { year, month, userKey, siteName, machineId } = params;
   const { startUtcIso, endUtcIso } = toUtcRangeOfJstMonth(year, month);
 
+  const conditions = [
+    `COALESCE(to_jsonb(l)->>'type', '') IN ('IN', 'OUT')`,
+    `COALESCE(to_jsonb(l)->>'timestamp', '') >= $1`,
+    `COALESCE(to_jsonb(l)->>'timestamp', '') < $2`,
+  ];
+  const queryParams: string[] = [startUtcIso, endUtcIso];
+
+  if (userKey?.trim()) {
+    queryParams.push(userKey.trim());
+    conditions.push(
+      `COALESCE(to_jsonb(l)->>'userId', to_jsonb(l)->'user'->>0, to_jsonb(l)->>'user', to_jsonb(l)->>'name (from user)', to_jsonb(l)->>'userName', '') = $${queryParams.length}`,
+    );
+  }
+
+  if (siteName?.trim()) {
+    queryParams.push(siteName.trim());
+    conditions.push(`COALESCE(to_jsonb(l)->>'siteName', to_jsonb(l)->>'sitename', '') = $${queryParams.length}`);
+  }
+
+  if (machineId != null && String(machineId).trim().length > 0) {
+    queryParams.push(String(machineId).trim());
+    conditions.push(`COALESCE(to_jsonb(l)->>'machineId', to_jsonb(l)->>'machineid', '') = $${queryParams.length}`);
+  }
+
   const result = await query<LogPayloadRow>(
     `
       SELECT to_jsonb(l) AS payload
       FROM logs l
-      WHERE COALESCE(to_jsonb(l)->>'type', '') IN ('IN', 'OUT')
-        AND COALESCE(to_jsonb(l)->>'timestamp', '') >= $1
-        AND COALESCE(to_jsonb(l)->>'timestamp', '') < $2
+      WHERE ${conditions.join('\n        AND ')}
       ORDER BY COALESCE(to_jsonb(l)->>'timestamp', '') ASC
     `,
-    [startUtcIso, endUtcIso],
+    queryParams,
   );
 
   const normalized = result.rows
     .map((row) => enrichRecord(row.payload))
-    .filter((row): row is EnrichedLog => Boolean(row))
-    .filter((row) => (!userKey ? true : row.userKey === userKey))
-    .filter((row) => (!siteName ? true : row.siteName === siteName))
-    .filter((row) => (!machineId ? true : row.machineId === String(machineId)));
+    .filter((row): row is EnrichedLog => Boolean(row));
 
   const byUser = new Map<string, EnrichedLog[]>();
   for (const row of normalized) {
