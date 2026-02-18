@@ -11,7 +11,8 @@
     "diag:p1": "tsx scripts/p1-diagnostics.ts",
     "db:seed-admin": "tsx scripts/db/seed-admin.ts",
     "migrate:airtable": "tsx scripts/migrate/airtable-to-neon.ts",
-    "migrate:verify": "tsx scripts/migrate/verify-neon.ts"
+    "migrate:verify": "tsx scripts/migrate/verify-neon.ts",
+    "backfill:log-audit": "tsx scripts/backfill/backfill-log-audit.ts"
   },
   "dependencies": {
     "exceljs": "^4.4.0",
