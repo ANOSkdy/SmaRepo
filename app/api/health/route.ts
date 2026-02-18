@@ -11,36 +11,38 @@ export async function GET(request: Request) {
   const session = await auth();
 
   if (!session?.user) {
-    requestLogger.warn('health.db.unauthorized');
+    requestLogger.warn('health.unauthorized');
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
   }
 
   const db = await getDatabaseHealth();
-  const status = db.ok ? 200 : 500;
+  const ok = db.ok;
 
-  requestLogger.info('health.db.checked', {
-    ok: db.ok,
-    connected: db.connected,
-    missingTables: Object.entries(db.tables)
-      .filter(([, present]) => !present)
-      .map(([table]) => table),
-    missingColumns: Object.entries(db.columns)
-      .filter(([, present]) => !present)
-      .map(([column]) => column),
+  requestLogger.info('health.checked', {
+    ok,
+    services: {
+      db: {
+        ok: db.ok,
+        connected: db.connected,
+      },
+    },
   });
 
   return NextResponse.json(
     {
-      ok: db.ok,
-      db: {
-        connected: db.connected,
-        tables: db.tables,
-        columns: db.columns,
+      ok,
+      services: {
+        db: {
+          ok: db.ok,
+          connected: db.connected,
+          tables: db.tables,
+          columns: db.columns,
+          error: db.error,
+        },
       },
-      error: db.error,
+      commit: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
       timestamp: new Date().toISOString(),
     },
-    { status },
+    { status: ok ? 200 : 500 },
   );
-
 }
