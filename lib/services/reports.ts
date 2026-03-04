@@ -37,7 +37,11 @@ function minutesBetween(a: Date, b: Date): number {
   return Math.max(0, Math.round(ms / 60000));
 }
 
-export async function getReportRowsByUserName(userNameOrUsername: string): Promise<ReportRow[]> {
+export async function getReportRowsByUserName(
+  userNameOrUsername: string,
+  sort?: "year" | "month" | "day" | "siteName",
+  order: "asc" | "desc" = "asc"
+): Promise<ReportRow[]> {
   const key = (userNameOrUsername ?? "").trim();
   if (!key) return [];
 
@@ -75,7 +79,7 @@ export async function getReportRowsByUserName(userNameOrUsername: string): Promi
   );
 
   // IN/OUT を時系列でペアリング
-  const rows: any[] = [];
+  const rows: Array<Record<string, unknown>> = [];
   let openIn: LogRow | null = null;
 
   for (const log of lres.rows) {
@@ -154,5 +158,22 @@ export async function getReportRowsByUserName(userNameOrUsername: string): Promi
   }
 
   // 既存型との整合は repo 側の ReportRow 定義に依存するため、安全にキャスト（必須項目は埋めている）
-  return rows as unknown as ReportRow[];
+
+  const sortedRows = [...rows].sort((a, b) => {
+    if (!sort) return 0;
+
+    const left = a[sort];
+    const right = b[sort];
+
+    if (typeof left === "number" && typeof right === "number") {
+      return order === "asc" ? left - right : right - left;
+    }
+
+    const leftText = String(left ?? "");
+    const rightText = String(right ?? "");
+    const compared = leftText.localeCompare(rightText, "ja");
+    return order === "asc" ? compared : -compared;
+  });
+
+  return sortedRows as unknown as ReportRow[];
 }
