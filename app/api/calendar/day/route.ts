@@ -245,7 +245,7 @@ export async function GET(req: NextRequest) {
 
     // admin は当日の全ユーザー分を返す（UIが「ユーザーごとの概要」を出す前提に合う）
     // 非adminは自分のみ
-    const params: any[] = [date];
+    const params: unknown[] = [date];
     let where = `l.work_date = $1::date`;
     if (!isAdmin) {
       params.push(viewerId);

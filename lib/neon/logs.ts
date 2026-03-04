@@ -68,7 +68,7 @@ export async function getLogsForUserFiltered(params: {
   toDateExclusive?: string; // YYYY-MM-DD
   siteName?: string | null;
 }): Promise<LogRow[]> {
-  const values: any[] = [params.userId];
+  const values: unknown[] = [params.userId];
   let idx = values.length;
 
   const where: string[] = [`user_id = $1::uuid`];

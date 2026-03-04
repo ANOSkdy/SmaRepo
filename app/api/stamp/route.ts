@@ -6,6 +6,16 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { getSql } from "@/lib/db/neon";
 
+type Sql = ReturnType<typeof getSql>;
+type AuthSessionLike = {
+  user?: {
+    id?: unknown;
+    email?: unknown;
+  };
+} | null | undefined;
+type ColumnRow = { column_name: string };
+type IdRow = { id: string };
+
 const Uuid = z.string().uuid();
 
 const BodySchema = z
@@ -127,7 +137,7 @@ function toJstWorkDate(d: Date): string {
   return jst.toISOString().slice(0, 10);
 }
 
-async function resolveUserId(sql: any, session: any): Promise<string | null> {
+async function resolveUserId(sql: Sql, session: AuthSessionLike): Promise<string | null> {
   const raw = session?.user?.id;
   if (typeof raw === "string" && Uuid.safeParse(raw).success) return raw;
 
@@ -140,21 +150,21 @@ async function resolveUserId(sql: any, session: any): Promise<string | null> {
     FROM information_schema.columns
     WHERE table_schema='public' AND table_name='users'
   `;
-  const set = new Set(cols.map((r: any) => r.column_name));
+  const set = new Set((cols as ColumnRow[]).map((r) => r.column_name));
 
   if (set.has("email")) {
     const rows = await sql`SELECT id FROM users WHERE email = ${email} LIMIT 1`;
-    return rows?.[0]?.id ?? null;
+    return (rows as IdRow[])?.[0]?.id ?? null;
   }
   if (set.has("email_address")) {
     const rows = await sql`SELECT id FROM users WHERE email_address = ${email} LIMIT 1`;
-    return rows?.[0]?.id ?? null;
+    return (rows as IdRow[])?.[0]?.id ?? null;
   }
 
   return null;
 }
 
-async function resolveMachineId(sql: any, machineRef: string): Promise<string | null> {
+async function resolveMachineId(sql: Sql, machineRef: string): Promise<string | null> {
   // UUIDならそのまま
   if (Uuid.safeParse(machineRef).success) return machineRef;
 
@@ -164,10 +174,10 @@ async function resolveMachineId(sql: any, machineRef: string): Promise<string | 
     FROM information_schema.columns
     WHERE table_schema='public' AND table_name='machines'
   `;
-  const set = new Set(cols.map((r: any) => r.column_name));
+  const set = new Set((cols as ColumnRow[]).map((r) => r.column_name));
 
   // よくある候補（列が無ければスキップ）
-  const candidates: Array<{ col: string; query: (v: string) => Promise<any[]> }> = [];
+  const candidates: Array<{ col: string; query: (v: string) => Promise<unknown[]> }> = [];
 
   if (set.has("machine_no")) {
     candidates.push({ col: "machine_no", query: (v) => sql`SELECT id FROM machines WHERE machine_no::text = ${v} LIMIT 1` });
@@ -189,7 +199,7 @@ async function resolveMachineId(sql: any, machineRef: string): Promise<string | 
   }
 
   for (const c of candidates) {
-    const rows = await c.query(machineRef);
+    const rows = (await c.query(machineRef)) as IdRow[];
     if (rows?.[0]?.id) return rows[0].id;
   }
 

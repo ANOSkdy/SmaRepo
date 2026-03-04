@@ -36,14 +36,6 @@ function isDigits(value: string): boolean {
   return /^[0-9]+$/.test(value);
 }
 
-function formatJstTime(date: Date): string {
-  return new Intl.DateTimeFormat("ja-JP", {
-    timeZone: "Asia/Tokyo",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date);
-}
 
 function getJstWorkDate(date = new Date()): string {
   // en-CA => YYYY-MM-DD
