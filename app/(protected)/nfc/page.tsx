@@ -1,15 +1,75 @@
-import { redirect } from 'next/navigation';
-import { auth } from '@/lib/auth';
-import StampCard from '@/components/StampCard';
-import { getFirstMachine, getMachineById, getTodayLogs } from '@/lib/airtable';
-import { ROUTES } from '@/src/constants/routes';
+// app/(protected)/nfc/page.tsx
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+import { hasDatabaseUrl } from "@/lib/server-env";
+import { query } from "@/lib/db";
+import StampCard from "@/components/StampCard";
+import { ROUTES } from "@/src/constants/routes";
 
-// ページが動的にレンダリングされるように設定
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
+
+type SearchParams = Record<string, string | string[] | undefined>;
+type MaybePromise<T> = T | Promise<T>;
 
 type NFCPageProps = {
-  searchParams: { [key: string]: string | string[] | undefined };
+  searchParams?: MaybePromise<SearchParams>;
 };
+
+type MachineRow = {
+  id: string;
+  machine_code: number;
+  name: string;
+  active: boolean;
+};
+
+type LastLogRow = {
+  stamp_type: string;
+  work_description: string | null;
+};
+
+function toSingleValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] ?? "";
+  return value ?? "";
+}
+
+function isDigits(value: string): boolean {
+  return /^[0-9]+$/.test(value);
+}
+
+function formatJstTime(date: Date): string {
+  return new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
+function getJstWorkDate(date = new Date()): string {
+  // en-CA => YYYY-MM-DD
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+async function resolveActiveMachineByCode(codeText: string): Promise<MachineRow | null> {
+  const code = Number.parseInt(codeText, 10);
+  if (!Number.isFinite(code)) return null;
+
+  const res = await query<MachineRow>(
+    `
+      SELECT id, machine_code, name, active
+      FROM machines
+      WHERE machine_code = $1 AND active = true
+      LIMIT 1
+    `,
+    [code]
+  );
+  return res.rows[0] ?? null;
+}
 
 export default async function NFCPage({ searchParams }: NFCPageProps) {
   const session = await auth();
@@ -17,96 +77,90 @@ export default async function NFCPage({ searchParams }: NFCPageProps) {
     redirect(ROUTES.LOGIN);
   }
 
-  const requestedMachineId =
-    typeof searchParams.machineId === 'string'
-      ? searchParams.machineId
-      : typeof searchParams.machineid === 'string'
-        ? searchParams.machineid
-        : null;
+  if (!hasDatabaseUrl()) {
+    return (
+      <div
+        role="alert"
+        className="rounded-lg border border-brand-border bg-brand-surface-alt p-4 text-brand-text"
+      >
+        データベース環境変数が未設定のため、打刻ページを表示できません。
+      </div>
+    );
+  }
 
-  const defaultMachineId = (process.env.NEXT_PUBLIC_DEFAULT_MACHINE_ID || '1003').trim();
+  const sp = (await searchParams) ?? {};
 
-  const candidates = [requestedMachineId, defaultMachineId].filter(
-    (value): value is string => typeof value === 'string' && value.trim().length > 0,
+  const requestedMachineIdRaw =
+    toSingleValue(sp.machineId).trim() || toSingleValue(sp.machineid).trim() || "";
+
+  const defaultMachineIdRaw = (process.env.NEXT_PUBLIC_DEFAULT_MACHINE_ID || "1003").trim();
+
+  const candidates = [requestedMachineIdRaw, defaultMachineIdRaw]
+    .map((v) => v.trim())
+    .filter((v) => v.length > 0 && isDigits(v));
+
+  // ここでは「誤った機械へ黙ってフォールバック」を避けるため、
+  // 候補（requested → default）のみで解決し、解決できなければエラー表示にする
+  let machine: MachineRow | null = null;
+  let resolvedMachineCodeText: string | null = null;
+
+  for (const cand of candidates) {
+    const found = await resolveActiveMachineByCode(cand);
+    if (found) {
+      machine = found;
+      resolvedMachineCodeText = String(found.machine_code);
+      break;
+    }
+  }
+
+  if (!machine || !resolvedMachineCodeText) {
+    return (
+      <div
+        role="alert"
+        className="rounded-lg border border-brand-border bg-brand-surface-alt p-4 text-brand-text"
+      >
+        機械情報を取得できませんでした。URL の machineId（数値）と Machines マスタを確認してください。
+      </div>
+    );
+  }
+
+  // URL 正規化（requested があり、解決結果と違うときだけ）
+  if (requestedMachineIdRaw && requestedMachineIdRaw !== resolvedMachineCodeText) {
+    redirect(`/nfc?machineId=${encodeURIComponent(resolvedMachineCodeText)}`);
+  }
+
+  // 当日（JST）の最終打刻から初期状態を決める（Neon logs）
+  const workDate = getJstWorkDate();
+  const lastLogRes = await query<LastLogRow>(
+    `
+      SELECT stamp_type, work_description
+      FROM logs
+      WHERE user_id = $1::uuid
+        AND work_date = $2::date
+      ORDER BY stamped_at DESC
+      LIMIT 1
+    `,
+    [session.user.id, workDate]
   );
+  const lastLog = lastLogRes.rows[0] ?? null;
 
-  let resolvedMachineId: string | null = null;
-  let machineRecord: NonNullable<Awaited<ReturnType<typeof getMachineById>>> | null = null;
+  const initialStampType = lastLog?.stamp_type === "IN" ? "OUT" : "IN";
+  const initialWorkDescription = lastLog?.work_description ?? "";
 
-  const seen = new Set<string>();
-  for (const candidate of candidates) {
-    const normalized = candidate.trim();
-    if (seen.has(normalized)) {
-      continue;
-    }
-    seen.add(normalized);
-    try {
-      const record = await getMachineById(normalized);
-      if (record) {
-        resolvedMachineId = (record.fields.machineid || normalized).trim();
-        machineRecord = record;
-        break;
-      }
-    } catch (error) {
-      console.warn('Failed to validate machineId candidate', { candidate: normalized, error });
-    }
-  }
+  const machineLabel = `${machine.name}（${machine.machine_code}）`;
 
-  if (!machineRecord) {
-    try {
-      const firstMachine = await getFirstMachine();
-      if (firstMachine) {
-        resolvedMachineId = (firstMachine.fields.machineid || '').trim() || null;
-        machineRecord = firstMachine;
-      }
-    } catch (error) {
-      console.error('Failed to fetch fallback machine', error);
-    }
-  }
-
-  if (!resolvedMachineId || !machineRecord) {
-    return (
-      <div role="alert" className="rounded-lg border border-brand-border bg-brand-surface-alt p-4 text-brand-text">
-        機械情報を取得できませんでした。時間をおいて再度お試しください。
-      </div>
-    );
-  }
-
-  if (requestedMachineId?.trim() !== resolvedMachineId) {
-    redirect(`/nfc?machineId=${resolvedMachineId}`);
-  }
-
-  try {
-    // 当日のログを取得
-    const logs = await getTodayLogs(session.user.id);
-    const lastLog = logs.length > 0 ? logs[logs.length - 1] : null;
-
-    // 最後のログが 'IN' なら退勤画面、そうでなければ出勤画面
-    const initialStampType = lastLog?.fields.type === 'IN' ? 'OUT' : 'IN';
-    const initialWorkDescription = lastLog?.fields.workDescription ?? '';
-    const machineLabel =
-      machineRecord.fields.machineid?.trim() || resolvedMachineId || requestedMachineId || '不明';
-
-    return (
-      <section className="flex flex-1 flex-col">
-        <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 space-y-6">
-          <div className="flex flex-1 items-center justify-center">
-            <StampCard
-              initialStampType={initialStampType}
-              initialWorkDescription={initialWorkDescription}
-              userName={session.user.name ?? 'ゲスト'}
-              machineName={machineLabel}
-            />
-          </div>
+  return (
+    <section className="flex flex-1 flex-col">
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 space-y-6">
+        <div className="flex flex-1 items-center justify-center">
+          <StampCard
+            initialStampType={initialStampType}
+            initialWorkDescription={initialWorkDescription}
+            userName={session.user.name ?? "ゲスト"}
+            machineName={machineLabel}
+          />
         </div>
-      </section>
-    );
-  } catch (error) {
-    console.error('Failed to fetch initial data:', error);
-    return (
-      <div role="alert" className="rounded-lg border border-brand-border bg-brand-surface-alt p-4 text-brand-text">
-        エラーが発生しました。時間をおいて再度お試しください。
       </div>
-    );
-  }
+    </section>
+  );
 }

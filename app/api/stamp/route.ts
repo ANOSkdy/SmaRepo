@@ -1,147 +1,283 @@
-// Ensure this route is built and executed on the Node.js runtime (NOT Edge)
-export const runtime = 'nodejs';
+﻿export const runtime = "nodejs";
 
-import { NextRequest, NextResponse } from 'next/server';
-// (intentionally no static import for the worker)
-import { auth } from '@/lib/auth';
-import {
-  logsTable,
-  machinesTable,
-  sitesTable,
-  withRetry,
-} from '@/lib/airtable';
-import { findNearestSiteDetailed } from '@/lib/geo';
-import { LOGS_ALLOWED_FIELDS, filterFields } from '@/lib/airtableSchema';
-import { LogFields } from '@/types';
-import { validateStampRequest } from './validator';
-import { logger } from '@/lib/logger';
+import { NextResponse } from "next/server";
+import { z } from "zod";
 
-function errorResponse(
-  code: string,
-  reason: string,
-  hint: string,
-  status: number,
-) {
-  return NextResponse.json({ ok: false, code, reason, hint }, { status });
-}
+import { auth } from "@/lib/auth";
+import { getSql } from "@/lib/db/neon";
 
-export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return errorResponse(
-      'UNAUTHORIZED',
-      'Authentication required',
-      'Sign in and retry',
-      401,
-    );
-  }
+const Uuid = z.string().uuid();
 
-  const parsed = validateStampRequest(await req.json());
-  if (!parsed.success) {
-    return errorResponse('INVALID_BODY', 'Invalid request body', parsed.hint, 400);
-  }
+const BodySchema = z
+  .object({
+    // type/stampType 揺れ吸収
+    type: z.string().optional(),
+    stampType: z.string().optional(),
+    stamp_type: z.string().optional(),
 
-  const {
-    machineId,
-    workDescription,
-    lat,
-    lon,
-    accuracy,
-    type,
-  } = parsed.data;
+    // machineId 揺れ吸収（数字でも文字でも受ける）
+    machineId: z.coerce.string().optional(),
+    machine_id: z.coerce.string().optional(),
 
-  try {
-    const machineRecords = await machinesTable
-      .select({
-        filterByFormula: `{machineid} = '${machineId}'`,
-        maxRecords: 1,
-      })
-      .firstPage();
+    // 任意
+    decidedSiteId: z.coerce.string().optional(),
+    decided_site_id: z.coerce.string().optional(),
+    siteId: z.coerce.string().optional(),
+    site_id: z.coerce.string().optional(),
 
-    if (machineRecords.length === 0 || !machineRecords[0].fields.active) {
-      return errorResponse(
-        'INVALID_MACHINE',
-        'Invalid or inactive machine ID',
-        'Check machineId',
-        400,
-      );
-    }
-    const machineRecordId = machineRecords[0].id;
+    workTypeId: z.coerce.string().optional(),
+    work_type_id: z.coerce.string().optional(),
 
-    const activeSites = await sitesTable.select({ filterByFormula: '{active} = 1' }).all();
-    logger.info('stamp active sites summary', {
-      count: activeSites.length,
-      hasAcoru: activeSites.some((s) => s.fields.name === 'Acoru合同会社'),
-    });
-    const { site: nearestSite, method: decisionMethod, nearestDistanceM } =
-      findNearestSiteDetailed(lat, lon, activeSites);
+    // work_description は DB NOT NULL なので未指定なら補完
+    workDescription: z.string().optional(),
+    work_description: z.string().optional(),
 
-    const now = new Date();
-    const timestamp = now.toISOString();
-    const dateJST = new Intl.DateTimeFormat('ja-JP', {
-      timeZone: 'Asia/Tokyo',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(now).replace(/\//g, '-');
+    // 位置情報（logs列に合わせる: lat/lon/accuracy_m）
+    lat: z.coerce.number().optional(),
+    lon: z.coerce.number().optional(),
+    lng: z.coerce.number().optional(),
+    longitude: z.coerce.number().optional(),
+    accuracy_m: z.coerce.number().optional(),
+    accuracy: z.coerce.number().optional(),
 
-    const candidate = {
-      timestamp,
-      date: dateJST,
-      user: [session.user.id], // AirtableのUsersテーブルのレコードID
-      machine: [machineRecordId],
-      siteName: nearestSite?.fields.name ?? null,
-      lat,
-      lon,
-      accuracy,
-      workDescription,
-      type,
-    };
-    const fields = filterFields(candidate, LOGS_ALLOWED_FIELDS) as Partial<LogFields>;
-    if (!fields.siteName && nearestSite?.fields?.name) {
-      fields.siteName = nearestSite.fields.name;
-    }
-    const clientName =
-      typeof nearestSite?.fields?.client === 'string'
-        ? nearestSite.fields.client.trim()
-        : undefined;
-    if (clientName) {
-      fields.clientName = clientName;
-    }
-    if (!fields.timestamp) {
-      fields.timestamp = timestamp;
-    }
+    position_timestamp_ms: z.coerce.number().optional(),
+    positionTimestampMs: z.coerce.number().optional(),
 
-    const createdRecords = await withRetry(() =>
-      logsTable.create([{ fields }], { typecast: true })
-    );
-    const created = createdRecords[0];
+    is_cached_position: z.boolean().optional(),
+    isCachedPosition: z.boolean().optional(),
 
-    if (created) {
-      logger.info('stamp record created', {
-        userId: session.user.id,
-        recordId: created.id,
-        type,
+    stampedAt: z.string().datetime().optional(),
+  })
+  .superRefine((d, ctx) => {
+    const rawType = (d.stampType ?? d.stamp_type ?? d.type ?? "").toUpperCase();
+    if (rawType !== "IN" && rawType !== "OUT") {
+      ctx.addIssue({
+        code: "custom",
+        message: "type/stampType must be IN or OUT",
+        path: ["type"],
       });
     }
 
-    return NextResponse.json(
-      {
-        decidedSiteId: nearestSite?.fields.siteId ?? null,
-        decidedSiteName: nearestSite?.fields.name ?? null,
-        decision_method: decisionMethod,
-        nearest_distance_m: nearestDistanceM ?? null,
-        accuracy,
-      },
-      { status: 200 },
-    );
-  } catch (error) {
-    logger.error('Failed to record stamp', error);
-    return errorResponse(
-      'INTERNAL_ERROR',
-      'Internal Server Error',
-      'Retry later',
-      500,
-    );
+    const rawMachine = (d.machineId ?? d.machine_id ?? "").toString().trim();
+    if (!rawMachine) {
+      ctx.addIssue({
+        code: "custom",
+        message: "machineId is required",
+        path: ["machineId"],
+      });
+    }
+  })
+  .transform((d) => {
+    const stampType = (d.stampType ?? d.stamp_type ?? d.type ?? "").toUpperCase() as "IN" | "OUT";
+    const machineRef = (d.machineId ?? d.machine_id ?? "").toString().trim();
+
+    const decidedSiteRef =
+      (d.decidedSiteId ?? d.decided_site_id ?? d.siteId ?? d.site_id ?? "").toString().trim() || null;
+
+    const workTypeRef =
+      (d.workTypeId ?? d.work_type_id ?? "").toString().trim() || null;
+
+    const workDescRaw = (d.workDescription ?? d.work_description ?? "").trim();
+    const workDescription = workDescRaw.length > 0 ? workDescRaw : "NFC打刻";
+
+    const lat = typeof d.lat === "number" ? d.lat : null;
+    const lon =
+      typeof d.lon === "number"
+        ? d.lon
+        : typeof d.lng === "number"
+          ? d.lng
+          : typeof d.longitude === "number"
+            ? d.longitude
+            : null;
+
+    const accuracyM =
+      typeof d.accuracy_m === "number"
+        ? d.accuracy_m
+        : typeof d.accuracy === "number"
+          ? d.accuracy
+          : null;
+
+    const positionTimestampMs =
+      typeof d.position_timestamp_ms === "number"
+        ? d.position_timestamp_ms
+        : typeof d.positionTimestampMs === "number"
+          ? d.positionTimestampMs
+          : null;
+
+    const isCachedPosition = d.is_cached_position ?? d.isCachedPosition ?? false;
+
+    return {
+      stampType,
+      machineRef,
+      decidedSiteRef,
+      workTypeRef,
+      workDescription,
+      lat,
+      lon,
+      accuracyM,
+      positionTimestampMs,
+      isCachedPosition,
+      stampedAt: d.stampedAt ?? null,
+    };
+  });
+
+function toJstWorkDate(d: Date): string {
+  // JST(UTC+9) の YYYY-MM-DD
+  const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  return jst.toISOString().slice(0, 10);
+}
+
+async function resolveUserId(sql: any, session: any): Promise<string | null> {
+  const raw = session?.user?.id;
+  if (typeof raw === "string" && Uuid.safeParse(raw).success) return raw;
+
+  const email = session?.user?.email;
+  if (typeof email !== "string" || email.length === 0) return null;
+
+  // users テーブルに email 列がある場合のみフォールバック
+  const cols = await sql`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='users'
+  `;
+  const set = new Set(cols.map((r: any) => r.column_name));
+
+  if (set.has("email")) {
+    const rows = await sql`SELECT id FROM users WHERE email = ${email} LIMIT 1`;
+    return rows?.[0]?.id ?? null;
+  }
+  if (set.has("email_address")) {
+    const rows = await sql`SELECT id FROM users WHERE email_address = ${email} LIMIT 1`;
+    return rows?.[0]?.id ?? null;
+  }
+
+  return null;
+}
+
+async function resolveMachineId(sql: any, machineRef: string): Promise<string | null> {
+  // UUIDならそのまま
+  if (Uuid.safeParse(machineRef).success) return machineRef;
+
+  // machines テーブルの「番号/コード」っぽい列で解決を試みる（存在する列だけ試す）
+  const cols = await sql`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='machines'
+  `;
+  const set = new Set(cols.map((r: any) => r.column_name));
+
+  // よくある候補（列が無ければスキップ）
+  const candidates: Array<{ col: string; query: (v: string) => Promise<any[]> }> = [];
+
+  if (set.has("machine_no")) {
+    candidates.push({ col: "machine_no", query: (v) => sql`SELECT id FROM machines WHERE machine_no::text = ${v} LIMIT 1` });
+  }
+  if (set.has("machine_number")) {
+    candidates.push({ col: "machine_number", query: (v) => sql`SELECT id FROM machines WHERE machine_number::text = ${v} LIMIT 1` });
+  }
+  if (set.has("machine_code")) {
+    candidates.push({ col: "machine_code", query: (v) => sql`SELECT id FROM machines WHERE machine_code::text = ${v} LIMIT 1` });
+  }
+  if (set.has("code")) {
+    candidates.push({ col: "code", query: (v) => sql`SELECT id FROM machines WHERE code::text = ${v} LIMIT 1` });
+  }
+  if (set.has("nfc_uid")) {
+    candidates.push({ col: "nfc_uid", query: (v) => sql`SELECT id FROM machines WHERE nfc_uid::text = ${v} LIMIT 1` });
+  }
+  if (set.has("tag_uid")) {
+    candidates.push({ col: "tag_uid", query: (v) => sql`SELECT id FROM machines WHERE tag_uid::text = ${v} LIMIT 1` });
+  }
+
+  for (const c of candidates) {
+    const rows = await c.query(machineRef);
+    if (rows?.[0]?.id) return rows[0].id;
+  }
+
+  return null;
+}
+
+function toNullableUuid(v: string | null): string | null {
+  if (!v) return null;
+  return Uuid.safeParse(v).success ? v : null;
+}
+
+export async function POST(req: Request) {
+  const requestId =
+    globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2);
+
+  try {
+    const session = await auth();
+    if (!session) {
+      return NextResponse.json({ ok: false, error: "Unauthorized", requestId }, { status: 401 });
+    }
+
+    const json = await req.json().catch(() => null);
+    const parsed = BodySchema.safeParse(json);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid request", issues: parsed.error.flatten(), requestId },
+        { status: 400 }
+      );
+    }
+
+    const input = parsed.data;
+    const stampedAt = input.stampedAt ? new Date(input.stampedAt) : new Date();
+    const workDate = toJstWorkDate(stampedAt);
+
+    const sql = getSql();
+
+    const userId = await resolveUserId(sql, session);
+    if (!userId) {
+      return NextResponse.json({ ok: false, error: "Unauthorized", requestId }, { status: 401 });
+    }
+
+    const machineId = await resolveMachineId(sql, input.machineRef);
+    if (!machineId) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid machineId", requestId },
+        { status: 400 }
+      );
+    }
+
+    const decidedSiteId = toNullableUuid(input.decidedSiteRef);
+    const workTypeId = toNullableUuid(input.workTypeRef);
+
+    const rows = await sql`
+      INSERT INTO logs (
+        stamped_at,
+        work_date,
+        user_id,
+        machine_id,
+        decided_site_id,
+        work_type_id,
+        work_description,
+        stamp_type,
+        lat,
+        lon,
+        accuracy_m,
+        position_timestamp_ms,
+        is_cached_position
+      ) VALUES (
+        ${stampedAt.toISOString()},
+        ${workDate},
+        ${userId},
+        ${machineId},
+        ${decidedSiteId},
+        ${workTypeId},
+        ${input.workDescription},
+        ${input.stampType},
+        ${input.lat},
+        ${input.lon},
+        ${input.accuracyM},
+        ${input.positionTimestampMs},
+        ${input.isCachedPosition}
+      )
+      RETURNING id, stamped_at, work_date, user_id, machine_id, stamp_type
+    `;
+
+    return NextResponse.json({ ok: true, stamp: rows[0], requestId }, { status: 201 });
+  } catch (err) {
+    console.error({ level: "error", event: "Failed to record stamp", requestId, err });
+    return NextResponse.json({ ok: false, error: "Failed to record stamp", requestId }, { status: 500 });
   }
 }

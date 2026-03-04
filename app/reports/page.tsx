@@ -1,6 +1,7 @@
-import Link from 'next/link';
+// app/reports/page.tsx
+import Link from "next/link";
 
-import ReportsTabs from '@/components/reports/ReportsTabs';
+import ReportsTabs from "@/components/reports/ReportsTabs";
 import {
   buildReportContext,
   flattenReportGroups,
@@ -11,18 +12,20 @@ import {
   summarizeReportItems,
   type SearchParams,
   fetchUsers,
-} from './_utils/reportData';
+} from "./_utils/reportData";
 
-export default async function ReportsPage({ searchParams }: { searchParams?: SearchParams }) {
-  const filters = parseFilters(searchParams);
+type MaybePromise<T> = T | Promise<T>;
 
-  const {
-    groups,
-    availableYears,
-    availableMonths,
-    availableDays,
-    availableSites,
-  } = await buildReportContext(filters);
+export default async function ReportsPage({
+  searchParams,
+}: {
+  searchParams?: MaybePromise<SearchParams>;
+}) {
+  const sp = (await searchParams) ?? {};
+  const filters = parseFilters(sp);
+
+  const { groups, availableYears, availableMonths, availableDays, availableSites } =
+    await buildReportContext(filters);
 
   const flatItems = flattenReportGroups(groups);
   const sortedItems = sortReportItems(flatItems);
@@ -33,15 +36,15 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Sea
   const exportUrl = filters.user
     ? (() => {
         const params = new URLSearchParams();
-        params.set('user', filters.user);
-        if (filters.site) params.set('site', filters.site);
-        if (filters.year) params.set('year', String(filters.year));
-        if (filters.month) params.set('month', String(filters.month));
-        if (filters.day) params.set('day', String(filters.day));
-        if (filters.auto) params.set('auto', filters.auto);
+        params.set("user", filters.user);
+        if (filters.site) params.set("site", filters.site);
+        if (filters.year) params.set("year", String(filters.year));
+        if (filters.month) params.set("month", String(filters.month));
+        if (filters.day) params.set("day", String(filters.day));
+        if (filters.auto) params.set("auto", filters.auto);
         return `/api/reports/export/excel?${params.toString()}`;
       })()
-    : '';
+    : "";
 
   return (
     <main className="mx-auto max-w-5xl space-y-6 p-6">
@@ -103,7 +106,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Sea
             <select
               id="year"
               name="year"
-              defaultValue={filters.year?.toString() ?? ''}
+              defaultValue={filters.year?.toString() ?? ""}
               disabled={!filters.user}
               className="mt-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-gray-100"
             >
@@ -123,7 +126,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Sea
             <select
               id="month"
               name="month"
-              defaultValue={filters.month?.toString() ?? ''}
+              defaultValue={filters.month?.toString() ?? ""}
               disabled={!filters.user}
               className="mt-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-gray-100"
             >
@@ -143,7 +146,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Sea
             <select
               id="day"
               name="day"
-              defaultValue={filters.day?.toString() ?? ''}
+              defaultValue={filters.day?.toString() ?? ""}
               disabled={!filters.user}
               className="mt-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-gray-100"
             >
@@ -163,7 +166,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Sea
             <select
               id="auto"
               name="auto"
-              defaultValue={filters.auto ?? 'all'}
+              defaultValue={filters.auto ?? "all"}
               disabled={!filters.user}
               className="mt-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-gray-100"
             >
@@ -187,10 +190,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Sea
           <span>※ グリッドの列構成・表記は現行と同じです。必要に応じて上部のフィルターをご利用ください。</span>
           <div className="flex items-center gap-3">
             {exportUrl ? (
-              <a
-                href={exportUrl}
-                className="rounded border border-indigo-500 px-3 py-1 text-indigo-600 hover:bg-indigo-50"
-              >
+              <a href={exportUrl} className="rounded border border-indigo-500 px-3 py-1 text-indigo-600 hover:bg-indigo-50">
                 Excel出力
               </a>
             ) : null}
@@ -225,19 +225,19 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Sea
                         <th className="border px-3 py-2 text-right font-semibold">計</th>
                       </tr>
                     </thead>
+
                     <tbody className="bg-white text-gray-900">
                       {sortedItems.map((row) => {
                         const summaryMinutes = row.workingMinutes + row.overtimeMinutes;
                         const totalHoursText = formatHoursFromMinutes(summaryMinutes);
                         const rowKey =
                           row.recordId ??
-                          `${row.year}-${row.month}-${row.day}-${row.siteName ?? ''}-${row.startTimestampMs ?? ''}-${row.endTimestampMs ?? ''}`;
+                          `${row.year}-${row.month}-${row.day}-${row.siteName ?? ""}-${row.startTimestampMs ?? ""}-${row.endTimestampMs ?? ""}`;
 
-                        const weekdayLabel = new Date(
-                          row.year,
-                          Math.max(0, row.month - 1),
-                          row.day,
-                        ).toLocaleDateString('ja-JP', { weekday: 'short' });
+                        const weekdayLabel = new Date(row.year, Math.max(0, row.month - 1), row.day).toLocaleDateString(
+                          "ja-JP",
+                          { weekday: "short" }
+                        );
 
                         return (
                           <tr key={rowKey} className="odd:bg-white even:bg-gray-50">
@@ -245,12 +245,12 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Sea
                             <td className="border px-3 py-2 tabular-nums">{row.month}</td>
                             <td className="border px-3 py-2 tabular-nums">{row.day}</td>
                             <td className="border px-3 py-2">{weekdayLabel}</td>
-                            <td className="border px-3 py-2">{filters.user || '—'}</td>
-                            <td className="border px-3 py-2">{row.siteName || '—'}</td>
-                            <td className="border px-3 py-2 tabular-nums">{row.startJst ?? '—'}</td>
+                            <td className="border px-3 py-2">{filters.user || "—"}</td>
+                            <td className="border px-3 py-2">{row.siteName || "—"}</td>
+                            <td className="border px-3 py-2 tabular-nums">{row.startJst ?? "—"}</td>
                             <td className="border px-3 py-2 tabular-nums">
                               <div className="flex items-center gap-2">
-                                <span>{row.endJst ?? '—'}</span>
+                                <span>{row.endJst ?? "—"}</span>
                                 {row.autoGenerated ? (
                                   <span
                                     className="badge-auto inline-flex h-4 w-4 items-center justify-center rounded-full border-2 border-red-500 bg-red-500 shadow-[0_0_0_2px_rgba(255,255,255,0.95)]"
@@ -260,33 +260,22 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Sea
                                 ) : null}
                               </div>
                             </td>
-                            <td className="border px-3 py-2 text-right tabular-nums">
-                              {formatWorkingHours(row.workingMinutes)}
-                            </td>
-                            <td className="border px-3 py-2 text-right tabular-nums">
-                              {formatHoursFromMinutes(row.overtimeMinutes)}
-                            </td>
-                            <td className="border px-3 py-2 text-right tabular-nums">
-                              {totalHoursText}
-                            </td>
+                            <td className="border px-3 py-2 text-right tabular-nums">{formatWorkingHours(row.workingMinutes)}</td>
+                            <td className="border px-3 py-2 text-right tabular-nums">{formatHoursFromMinutes(row.overtimeMinutes)}</td>
+                            <td className="border px-3 py-2 text-right tabular-nums">{totalHoursText}</td>
                           </tr>
                         );
                       })}
                     </tbody>
+
                     <tfoot className="bg-gray-50 text-gray-700">
                       <tr>
                         <td className="border px-3 py-2 font-semibold" colSpan={8}>
                           合計
                         </td>
-                        <td className="border px-3 py-2 text-right tabular-nums font-semibold">
-                          {formatWorkingHours(totalWorkingMinutes)}
-                        </td>
-                        <td className="border px-3 py-2 text-right tabular-nums font-semibold">
-                          {formatHoursFromMinutes(totalOvertimeMinutes)}
-                        </td>
-                        <td className="border px-3 py-2 text-right tabular-nums font-semibold">
-                          {formatHoursFromMinutes(totalSummaryMinutes)}
-                        </td>
+                        <td className="border px-3 py-2 text-right tabular-nums font-semibold">{formatWorkingHours(totalWorkingMinutes)}</td>
+                        <td className="border px-3 py-2 text-right tabular-nums font-semibold">{formatHoursFromMinutes(totalOvertimeMinutes)}</td>
+                        <td className="border px-3 py-2 text-right tabular-nums font-semibold">{formatHoursFromMinutes(totalSummaryMinutes)}</td>
                       </tr>
                     </tfoot>
                   </table>
