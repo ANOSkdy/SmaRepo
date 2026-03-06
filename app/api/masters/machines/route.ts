@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { hasDatabaseUrl } from '@/lib/server-env';
 
@@ -10,6 +11,11 @@ type MachineRow = {
 };
 
 export async function GET() {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  }
+
   if (!hasDatabaseUrl()) {
     return NextResponse.json({ ok: false, error: 'DB env missing' }, { status: 500 });
   }
