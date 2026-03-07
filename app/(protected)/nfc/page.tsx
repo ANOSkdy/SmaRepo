@@ -22,9 +22,9 @@ type MachineRow = {
   active: boolean;
 };
 
-type LastLogRow = {
-  stamp_type: string;
-  work_description: string | null;
+type TodaySessionRow = {
+  has_open: boolean;
+  latest_work_description_snapshot: string | null;
 };
 
 function toSingleValue(value: string | string[] | undefined): string {
@@ -121,11 +121,36 @@ export default async function NFCPage({ searchParams }: NFCPageProps) {
     redirect(`/nfc?machineId=${encodeURIComponent(resolvedMachineCodeText)}`);
   }
 
-  // 当日（JST）の最終打刻から初期状態を決める（Neon logs）
+  // 当日（JST）の session 状態のみで初期状態を決める（前日状態を持ち越さない）
   const workDate = getJstWorkDate();
-  const lastLogRes = await query<LastLogRow>(
+  const todaySessionRes = await query<TodaySessionRow>(
     `
-      SELECT stamp_type, work_description
+      SELECT
+        EXISTS(
+          SELECT 1
+          FROM sessions s
+          WHERE s.user_id = $1::uuid
+            AND s.work_date = $2::date
+            AND s.status = 'open'
+        ) AS has_open,
+        (
+          SELECT s.work_description_snapshot
+          FROM sessions s
+          WHERE s.user_id = $1::uuid
+            AND s.work_date = $2::date
+          ORDER BY s.start_at DESC
+          LIMIT 1
+        ) AS latest_work_description_snapshot
+    `,
+    [session.user.id, workDate]
+  );
+  const todaySession = todaySessionRes.rows[0] ?? null;
+
+  const initialStampType = todaySession?.has_open ? "OUT" : "IN";
+
+  const lastLogRes = await query<{ work_description: string | null }>(
+    `
+      SELECT work_description
       FROM logs
       WHERE user_id = $1::uuid
         AND work_date = $2::date
@@ -135,9 +160,8 @@ export default async function NFCPage({ searchParams }: NFCPageProps) {
     [session.user.id, workDate]
   );
   const lastLog = lastLogRes.rows[0] ?? null;
-
-  const initialStampType = lastLog?.stamp_type === "IN" ? "OUT" : "IN";
-  const initialWorkDescription = lastLog?.work_description ?? "";
+  const initialWorkDescription =
+    todaySession?.latest_work_description_snapshot ?? lastLog?.work_description ?? "";
 
   const machineLabel = `${machine.name}（${machine.machine_code}）`;
 
