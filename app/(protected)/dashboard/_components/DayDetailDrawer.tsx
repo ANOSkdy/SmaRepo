@@ -9,8 +9,9 @@ type SessionRecord = {
   clockInAt: string;
   clockOutAt?: string | null;
   hours?: number | null;
-  status: '正常' | '稼働中';
+  status: 'open' | 'close' | 'closed' | '完了' | '稼働中';
   machineId: string | null | undefined;
+  machineCode?: number | null;
   machineName?: string | null;
   workDescription?: string | null;
 };
@@ -127,6 +128,20 @@ export default function DayDetailDrawer({ date, open, onClose }: DayDetailDrawer
   }, [open]);
 
   const headerLabel = useMemo(() => formatDateLabel(detail?.date ?? date ?? null), [date, detail?.date]);
+
+  const resolveStatus = (status: SessionRecord['status']) => {
+    if (status === 'open' || status === '稼働中') {
+      return {
+        label: '稼働中',
+        className: 'text-red-600',
+      };
+    }
+    return {
+      label: '完了',
+      className: 'text-blue-600',
+    };
+  };
+
   const sessionGroups = useMemo<SessionGroup[]>(() => {
     if (!detail?.sessions) {
       return [];
@@ -244,8 +259,7 @@ export default function DayDetailDrawer({ date, open, onClose }: DayDetailDrawer
                         </div>
                         <div className="mt-2 divide-y divide-brand-border/60">
                           {group.items.map((session, index) => {
-                            const statusClass =
-                              session.status === '稼働中' ? 'text-amber-600' : 'text-brand-primary';
+                            const statusMeta = resolveStatus(session.status);
                             return (
                               <div
                                 key={`${session.userName}-${session.clockInAt}-${index}`}
@@ -257,15 +271,15 @@ export default function DayDetailDrawer({ date, open, onClose }: DayDetailDrawer
                                 <div className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-brand-text">
                                   <span>
                                     {session.clockInAt}
-                                    {session.clockOutAt ? ` → ${session.clockOutAt}` : ''}
+                                    {session.clockOutAt ? ` ～ ${session.clockOutAt}` : ' ～ --:--'}
                                   </span>
                                   {typeof session.hours === 'number' ? <span>（{session.hours}時間）</span> : null}
-                                  <span className={`text-xs sm:text-sm ${statusClass}`}>{session.status}</span>
+                                  <span className={`text-xs sm:text-sm ${statusMeta.className}`}>{statusMeta.label}</span>
                                 </div>
                                 <div className="mt-1 text-sm text-brand-text">
                                   <span className="mr-2 opacity-70">機械</span>
                                   <MachineTag
-                                    id={session.machineId}
+                                    id={session.machineCode?.toString() ?? session.machineId}
                                     name={session.machineName}
                                     className="tabular-nums"
                                   />
