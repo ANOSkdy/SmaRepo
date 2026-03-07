@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 
-import { createNfcAttendanceStateService } from '@/lib/services/nfcAttendanceState';
+import {
+  createNfcAttendanceStateService,
+  resolveNfcInitialViewState,
+} from '@/lib/services/nfcAttendanceState';
 
 type SessionRow = {
   status: 'open' | 'closed';
@@ -133,4 +136,82 @@ test('リロード/再訪問相当で毎回サーバー由来stateを返せる',
   assert.strictEqual(second.stampType, 'OUT');
   assert.strictEqual(first.workDescription, '検品');
   assert.strictEqual(second.workDescription, '検品');
+});
+
+
+test('open sessionあり + 同一machineIdなら勤務中状態(OUT)を復元する', () => {
+  const view = resolveNfcInitialViewState({
+    attendanceState: {
+      isWorking: true,
+      stampType: 'OUT',
+      workDescription: '積み込み',
+      sessionStartAt: '2026-02-20T00:00:00.000Z',
+      machineId: '22222222-2222-4222-8222-222222222222',
+      decidedSiteId: null,
+      decidedSiteNameSnapshot: null,
+    },
+    requestedMachineIdRaw: '1003',
+    resolvedMachineId: '22222222-2222-4222-8222-222222222222',
+  });
+
+  assert.strictEqual(view.initialStampType, 'OUT');
+  assert.strictEqual(view.machineSwitchSourceMachineId, null);
+});
+
+test('open sessionあり + 異なるmachineIdなら機械切替フローを優先(INへ)する', () => {
+  const view = resolveNfcInitialViewState({
+    attendanceState: {
+      isWorking: true,
+      stampType: 'OUT',
+      workDescription: '積み込み',
+      sessionStartAt: '2026-02-20T00:00:00.000Z',
+      machineId: '22222222-2222-4222-8222-222222222222',
+      decidedSiteId: null,
+      decidedSiteNameSnapshot: null,
+    },
+    requestedMachineIdRaw: '1004',
+    resolvedMachineId: '99999999-9999-4999-8999-999999999999',
+  });
+
+  assert.strictEqual(view.initialStampType, 'IN');
+  assert.strictEqual(view.machineSwitchSourceMachineId, '22222222-2222-4222-8222-222222222222');
+});
+
+test('open sessionなし + machineId指定ありでも通常INフローを維持する', () => {
+  const view = resolveNfcInitialViewState({
+    attendanceState: {
+      isWorking: false,
+      stampType: 'IN',
+      workDescription: '',
+      sessionStartAt: null,
+      machineId: null,
+      decidedSiteId: null,
+      decidedSiteNameSnapshot: null,
+    },
+    requestedMachineIdRaw: '1004',
+    resolvedMachineId: '99999999-9999-4999-8999-999999999999',
+  });
+
+  assert.strictEqual(view.initialStampType, 'IN');
+  assert.strictEqual(view.machineSwitchSourceMachineId, null);
+});
+
+
+test('URL machineId未指定ならopen sessionをそのまま復元する', () => {
+  const view = resolveNfcInitialViewState({
+    attendanceState: {
+      isWorking: true,
+      stampType: 'OUT',
+      workDescription: '検品',
+      sessionStartAt: '2026-02-20T03:30:00.000Z',
+      machineId: '22222222-2222-4222-8222-222222222222',
+      decidedSiteId: null,
+      decidedSiteNameSnapshot: null,
+    },
+    requestedMachineIdRaw: '',
+    resolvedMachineId: '99999999-9999-4999-8999-999999999999',
+  });
+
+  assert.strictEqual(view.initialStampType, 'OUT');
+  assert.strictEqual(view.machineSwitchSourceMachineId, null);
 });

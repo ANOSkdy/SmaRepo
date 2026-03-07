@@ -8,6 +8,39 @@ export type NfcAttendanceState = {
   decidedSiteNameSnapshot: string | null;
 };
 
+
+export type NfcInitialViewState = {
+  initialStampType: 'IN' | 'OUT';
+  machineSwitchSourceMachineId: string | null;
+};
+
+export function resolveNfcInitialViewState(params: {
+  attendanceState: NfcAttendanceState;
+  requestedMachineIdRaw: string;
+  resolvedMachineId: string;
+}): NfcInitialViewState {
+  const requestedMachineId = params.requestedMachineIdRaw.trim();
+  const hasRequestedMachineId = requestedMachineId.length > 0;
+  const shouldForceMachineSwitch =
+    hasRequestedMachineId &&
+    params.attendanceState.isWorking &&
+    typeof params.attendanceState.machineId === 'string' &&
+    params.attendanceState.machineId.length > 0 &&
+    params.attendanceState.machineId !== params.resolvedMachineId;
+
+  if (shouldForceMachineSwitch) {
+    return {
+      initialStampType: 'IN',
+      machineSwitchSourceMachineId: params.attendanceState.machineId,
+    };
+  }
+
+  return {
+    initialStampType: params.attendanceState.stampType,
+    machineSwitchSourceMachineId: null,
+  };
+}
+
 type SessionRow = {
   status: 'open' | 'closed';
   work_description_snapshot: string | null;

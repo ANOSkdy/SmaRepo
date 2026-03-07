@@ -3,7 +3,10 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { hasDatabaseUrl } from "@/lib/server-env";
 import { query } from "@/lib/db";
-import { createNfcAttendanceStateService } from "@/lib/services/nfcAttendanceState";
+import {
+  createNfcAttendanceStateService,
+  resolveNfcInitialViewState,
+} from "@/lib/services/nfcAttendanceState";
 import StampCard from "@/components/StampCard";
 import { ROUTES } from "@/src/constants/routes";
 
@@ -109,6 +112,11 @@ export default async function NFCPage({ searchParams }: NFCPageProps) {
 
   const nfcAttendanceStateService = createNfcAttendanceStateService();
   const currentAttendanceState = await nfcAttendanceStateService.getCurrentStateForUser(session.user.id);
+  const initialViewState = resolveNfcInitialViewState({
+    attendanceState: currentAttendanceState,
+    requestedMachineIdRaw,
+    resolvedMachineId: machine.id,
+  });
 
   const machineLabel = `${machine.name}（${machine.machine_code}）`;
 
@@ -117,8 +125,9 @@ export default async function NFCPage({ searchParams }: NFCPageProps) {
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 space-y-6">
         <div className="flex flex-1 items-center justify-center">
           <StampCard
-            initialStampType={currentAttendanceState.stampType}
+            initialStampType={initialViewState.initialStampType}
             initialWorkDescription={currentAttendanceState.workDescription}
+            machineSwitchSourceMachineId={initialViewState.machineSwitchSourceMachineId}
             userName={session.user.name ?? "ゲスト"}
             machineName={machineLabel}
           />

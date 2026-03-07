@@ -19,7 +19,8 @@ type StampCardProps = {
   initialStampType: 'IN' | 'OUT';
   initialWorkDescription: string;
   userName: string;
-  machineName: string; 
+  machineName: string;
+  machineSwitchSourceMachineId?: string | null;
 };
 
 // 完了・エラー・待機時の汎用表示コンポーネント
@@ -283,6 +284,7 @@ export default function StampCard({
   initialWorkDescription,
   userName,
   machineName,
+  machineSwitchSourceMachineId = null,
 }: StampCardProps) {
   const router = useRouter();
   useMidnightJSTRefetch(() => {
@@ -492,13 +494,46 @@ export default function StampCard({
     handleStamp('OUT', lastWorkDescription);
   };
 
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (hasPromptedSwitchRef.current) return;
+
+    const previousMachineId = machineSwitchSourceMachineId?.trim();
+    const currentMachineId = machineId?.trim() ?? null;
+    if (!previousMachineId || !currentMachineId) return;
+    if (previousMachineId === currentMachineId) return;
+
+    hasPromptedSwitchRef.current = true;
+
+    const confirmed = window.confirm('別の機械で出勤中です。退勤して新しい機械に切り替えますか？');
+    if (!confirmed) {
+      return;
+    }
+
+    const workDescriptionForSwitch = lastWorkDescription || 'NFC打刻';
+
+    void (async () => {
+      const success = await handleStamp('OUT', workDescriptionForSwitch, {
+        machineIdOverride: previousMachineId,
+        nextStampState: 'IN',
+      });
+      if (success) {
+        setWarning('');
+        setError('');
+        setLocationError(null);
+        router.replace(`/nfc?machineId=${encodeURIComponent(currentMachineId)}`);
+      }
+    })();
+  }, [handleStamp, lastWorkDescription, machineId, machineSwitchSourceMachineId, router]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (hasPromptedSwitchRef.current) return;
     if (initialStampType !== 'OUT') return;
     if (stampType !== 'OUT') return;
 
-    const previousMachineId = readLastMachineId();
+    const previousMachineId = machineSwitchSourceMachineId?.trim() || readLastMachineId();
     const currentMachineId = machineId?.trim() ?? null;
     if (!previousMachineId || !currentMachineId) return;
     if (previousMachineId === currentMachineId) return;
@@ -527,7 +562,7 @@ export default function StampCard({
         router.replace(`/nfc?machineId=${encodeURIComponent(currentMachineId)}`);
       }
     })();
-  }, [handleStamp, initialStampType, lastWorkDescription, machineId, router, stampType]);
+  }, [handleStamp, initialStampType, lastWorkDescription, machineId, router, stampType, machineSwitchSourceMachineId]);
 
   if (isLoading) {
     return <CardState title="処理中" message="サーバーと通信しています。" role="status" />;
