@@ -6,9 +6,14 @@ import MachineTag from '@/components/MachineTag';
 type SessionRecord = {
   userName: string;
   siteName: string | null;
-  clockInAt: string;
+  clockInAt?: string | null;
   clockOutAt?: string | null;
+  startJst?: string | null;
+  endJst?: string | null;
+  startAt?: string | null;
+  endAt?: string | null;
   hours?: number | null;
+  durationMin?: number | null;
   status: 'open' | 'close' | 'closed' | '完了' | '稼働中';
   machineId: string | null | undefined;
   machineCode?: number | null;
@@ -56,6 +61,38 @@ function formatDateLabel(date: string | null) {
   } catch {
     return date;
   }
+}
+
+function normalizeJstTime(value: string | null | undefined): string | null {
+  if (!value) return null;
+
+  const plainTime = value.match(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
+  if (plainTime) {
+    return value;
+  }
+
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    return new Intl.DateTimeFormat('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(parsed);
+  }
+
+  return null;
+}
+
+function getSessionTimeRange(session: SessionRecord) {
+  const start =
+    normalizeJstTime(session.clockInAt) ?? normalizeJstTime(session.startJst) ?? normalizeJstTime(session.startAt);
+  const end = normalizeJstTime(session.clockOutAt) ?? normalizeJstTime(session.endJst) ?? normalizeJstTime(session.endAt);
+
+  return {
+    startLabel: start ?? '--:--',
+    endLabel: end ?? '--:--',
+  };
 }
 
 export default function DayDetailDrawer({ date, open, onClose }: DayDetailDrawerProps) {
@@ -260,6 +297,7 @@ export default function DayDetailDrawer({ date, open, onClose }: DayDetailDrawer
                         <div className="mt-2 divide-y divide-brand-border/60">
                           {group.items.map((session, index) => {
                             const statusMeta = resolveStatus(session.status);
+                            const { startLabel, endLabel } = getSessionTimeRange(session);
                             return (
                               <div
                                 key={`${session.userName}-${session.clockInAt}-${index}`}
@@ -270,8 +308,7 @@ export default function DayDetailDrawer({ date, open, onClose }: DayDetailDrawer
                                 </p>
                                 <div className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-brand-text">
                                   <span>
-                                    {session.clockInAt}
-                                    {session.clockOutAt ? ` ～ ${session.clockOutAt}` : ' ～ --:--'}
+                                    {startLabel} ～ {endLabel}
                                   </span>
                                   {typeof session.hours === 'number' ? <span>（{session.hours}時間）</span> : null}
                                   <span className={`text-xs sm:text-sm ${statusMeta.className}`}>{statusMeta.label}</span>
