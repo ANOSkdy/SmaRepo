@@ -6,11 +6,17 @@ import MachineTag from '@/components/MachineTag';
 type SessionRecord = {
   userName: string;
   siteName: string | null;
-  clockInAt: string;
+  clockInAt?: string | null;
   clockOutAt?: string | null;
+  startJst?: string | null;
+  endJst?: string | null;
+  startAt?: string | null;
+  endAt?: string | null;
   hours?: number | null;
-  status: '正常' | '稼働中';
+  durationMin?: number | null;
+  status: 'open' | 'close' | 'closed' | '完了' | '稼働中';
   machineId: string | null | undefined;
+  machineCode?: number | null;
   machineName?: string | null;
   workDescription?: string | null;
 };
@@ -55,6 +61,38 @@ function formatDateLabel(date: string | null) {
   } catch {
     return date;
   }
+}
+
+function normalizeJstTime(value: string | null | undefined): string | null {
+  if (!value) return null;
+
+  const plainTime = value.match(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
+  if (plainTime) {
+    return value;
+  }
+
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    return new Intl.DateTimeFormat('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(parsed);
+  }
+
+  return null;
+}
+
+function getSessionTimeRange(session: SessionRecord) {
+  const start =
+    normalizeJstTime(session.clockInAt) ?? normalizeJstTime(session.startJst) ?? normalizeJstTime(session.startAt);
+  const end = normalizeJstTime(session.clockOutAt) ?? normalizeJstTime(session.endJst) ?? normalizeJstTime(session.endAt);
+
+  return {
+    startLabel: start ?? '--:--',
+    endLabel: end ?? '--:--',
+  };
 }
 
 export default function DayDetailDrawer({ date, open, onClose }: DayDetailDrawerProps) {
@@ -127,6 +165,20 @@ export default function DayDetailDrawer({ date, open, onClose }: DayDetailDrawer
   }, [open]);
 
   const headerLabel = useMemo(() => formatDateLabel(detail?.date ?? date ?? null), [date, detail?.date]);
+
+  const resolveStatus = (status: SessionRecord['status']) => {
+    if (status === 'open' || status === '稼働中') {
+      return {
+        label: '稼働中',
+        className: 'text-red-600',
+      };
+    }
+    return {
+      label: '完了',
+      className: 'text-blue-600',
+    };
+  };
+
   const sessionGroups = useMemo<SessionGroup[]>(() => {
     if (!detail?.sessions) {
       return [];
@@ -244,8 +296,8 @@ export default function DayDetailDrawer({ date, open, onClose }: DayDetailDrawer
                         </div>
                         <div className="mt-2 divide-y divide-brand-border/60">
                           {group.items.map((session, index) => {
-                            const statusClass =
-                              session.status === '稼働中' ? 'text-amber-600' : 'text-brand-primary';
+                            const statusMeta = resolveStatus(session.status);
+                            const { startLabel, endLabel } = getSessionTimeRange(session);
                             return (
                               <div
                                 key={`${session.userName}-${session.clockInAt}-${index}`}
@@ -256,16 +308,15 @@ export default function DayDetailDrawer({ date, open, onClose }: DayDetailDrawer
                                 </p>
                                 <div className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-brand-text">
                                   <span>
-                                    {session.clockInAt}
-                                    {session.clockOutAt ? ` → ${session.clockOutAt}` : ''}
+                                    {startLabel} ～ {endLabel}
                                   </span>
                                   {typeof session.hours === 'number' ? <span>（{session.hours}時間）</span> : null}
-                                  <span className={`text-xs sm:text-sm ${statusClass}`}>{session.status}</span>
+                                  <span className={`text-xs sm:text-sm ${statusMeta.className}`}>{statusMeta.label}</span>
                                 </div>
                                 <div className="mt-1 text-sm text-brand-text">
                                   <span className="mr-2 opacity-70">機械</span>
                                   <MachineTag
-                                    id={session.machineId}
+                                    id={session.machineCode?.toString() ?? session.machineId}
                                     name={session.machineName}
                                     className="tabular-nums"
                                   />
