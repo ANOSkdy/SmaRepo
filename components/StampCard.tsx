@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { SiteFields, WorkTypeFields } from '@/types';
 import { Record } from 'airtable';
@@ -13,6 +13,7 @@ import {
   normalizeToLocationError,
 } from '@/lib/location-error';
 import { useMidnightJSTRefetch } from '@/hooks/useMidnightJSTRefetch';
+import { createInFlightRequest, isFreshPositionTimestamp } from '@/lib/stamp/geolocation-prefetch';
 
 type StampCardProps = {
   initialStampType: 'IN' | 'OUT';
@@ -57,6 +58,7 @@ const HARD_MAX_WAIT = 8000;
 const VERY_BAD_ACC = 300;
 const VERY_OLD_MS = 15000;
 const GEO_TIMEOUT_MS = 10000;
+const PREFETCH_FRESHNESS_MS = 10_000;
 const LAST_POSITION_STORAGE_KEY = 'smarepo:lastPosition';
 const LAST_MACHINE_STORAGE_KEY = 'smarepo:lastMachineId';
 
@@ -242,17 +244,18 @@ function watchForBetter(opts: { limitMs: number; earlyStop: (p: Fix) => boolean 
 
 async function getBestPositionAdaptive(
   isInsidePolygon: (lat: number, lon: number) => boolean,
+  getCurrentPosition: () => Promise<Fix>,
 ): Promise<Fix> {
   const stored = readStoredPosition();
   try {
-    const first = await getOnce(GEO_TIMEOUT_MS);
+    const first = await getCurrentPosition();
     const a1 = first.coords.accuracy ?? Number.POSITIVE_INFINITY;
     const age1 = Date.now() - first.timestamp;
     const lat1 = first.coords.latitude;
     const lon1 = first.coords.longitude;
 
     if (isInsidePolygon(lat1, lon1)) return first;
-    if (a1 <= ACCEPT_ACCURACY && age1 <= 10000) return first;
+    if (a1 <= ACCEPT_ACCURACY && age1 <= PREFETCH_FRESHNESS_MS) return first;
 
     const budget = a1 > VERY_BAD_ACC && age1 > VERY_OLD_MS ? HARD_MAX_WAIT : SOFT_MAX_WAIT;
 
@@ -304,6 +307,23 @@ export default function StampCard({
 
   const searchParams = useSearchParams();
   const machineId = searchParams.get('machineId') ?? searchParams.get('machineid');
+  const prefetchedPositionRef = useRef<Fix | null>(null);
+
+  const getCurrentPosition = useMemo(
+    () => createInFlightRequest(() => getOnce(GEO_TIMEOUT_MS)),
+    [],
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    void getCurrentPosition()
+      .then((position) => {
+        prefetchedPositionRef.current = position;
+      })
+      .catch(() => {
+        // Preserve current UX: do not show errors during background prefetch.
+      });
+  }, [getCurrentPosition]);
 
   useEffect(() => {
     if (stampType === 'IN') {
@@ -348,16 +368,29 @@ export default function StampCard({
       let succeeded = false;
 
       try {
-        const position = await getBestPositionAdaptive((lat, lon) => {
-          try {
-            return sites.some((site) => {
-              const geom = extractGeometry(site.fields.polygon_geojson ?? null);
-              return geom ? pointInGeometry(lat, lon, geom) : false;
-            });
-          } catch {
-            return false;
-          }
-        });
+        const now = Date.now();
+        const prefetched = prefetchedPositionRef.current;
+        const prefetchedIsFresh =
+          prefetched !== null &&
+          isFreshPositionTimestamp(prefetched.timestamp, now, PREFETCH_FRESHNESS_MS);
+
+        const position = prefetchedIsFresh
+          ? prefetched
+          : await getBestPositionAdaptive(
+              (lat, lon) => {
+                try {
+                  return sites.some((site) => {
+                    const geom = extractGeometry(site.fields.polygon_geojson ?? null);
+                    return geom ? pointInGeometry(lat, lon, geom) : false;
+                  });
+                } catch {
+                  return false;
+                }
+              },
+              getCurrentPosition,
+            );
+
+        prefetchedPositionRef.current = position;
 
         const { latitude, longitude, accuracy } = position.coords;
         const positionTimestamp = position.timestamp;
@@ -434,7 +467,7 @@ export default function StampCard({
 
       return succeeded;
     },
-    [machineId, selectedWorkTypeId, sites],
+    [getCurrentPosition, machineId, selectedWorkTypeId, sites],
   );
 
   const handleRetryLocation = () => {
