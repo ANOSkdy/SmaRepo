@@ -65,3 +65,28 @@ test('filterFields keeps clientName when provided', () => {
   assert.deepStrictEqual(result, candidate);
 });
 
+
+
+test('validateStampRequest succeeds with workTypeId and positionTimestampMs', () => {
+  const result = validateStampRequest({
+    machineId: '1',
+    workDescription: 'test',
+    lat: 0,
+    lon: 0,
+    type: 'IN',
+    workTypeId: '33333333-3333-4333-8333-333333333333',
+    positionTimestampMs: 123456789,
+  });
+  assert.strictEqual(result.success, true);
+});
+
+test('validateStampRequest succeeds without position timestamp', () => {
+  const result = validateStampRequest({
+    machineId: '1',
+    workDescription: 'test',
+    lat: 0,
+    lon: 0,
+    type: 'IN',
+  });
+  assert.strictEqual(result.success, true);
+});

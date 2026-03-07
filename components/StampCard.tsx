@@ -297,6 +297,7 @@ export default function StampCard({
   const [warning, setWarning] = useState('');
   const [lastWorkDescription, setLastWorkDescription] = useState(initialWorkDescription);
   const [selectedWork, setSelectedWork] = useState('');
+  const [selectedWorkTypeId, setSelectedWorkTypeId] = useState<string | null>(null);
   const [locationError, setLocationError] = useState<LocationError | null>(null);
   const [pendingStamp, setPendingStamp] = useState<{ type: 'IN' | 'OUT'; workDescription: string } | null>(null);
   const hasPromptedSwitchRef = useRef(false);
@@ -381,7 +382,8 @@ export default function StampCard({
               lon: longitude,
               accuracy: typeof accuracy === 'number' ? accuracy : null,
               type,
-              positionTimestamp,
+              positionTimestampMs: positionTimestamp,
+              workTypeId: type === 'IN' ? selectedWorkTypeId : null,
               clientDecision: 'auto',
               siteId: decidedSite?.fields.siteId,
             }),
@@ -411,6 +413,7 @@ export default function StampCard({
             if (nextState === 'IN') {
               setLastWorkDescription('');
               setSelectedWork('');
+              setSelectedWorkTypeId(null);
             }
             writeLastMachineId(null);
           }
@@ -431,7 +434,7 @@ export default function StampCard({
 
       return succeeded;
     },
-    [machineId, sites],
+    [machineId, selectedWorkTypeId, sites],
   );
 
   const handleRetryLocation = () => {
@@ -566,7 +569,11 @@ export default function StampCard({
                 name="workDescription"
                 required
                 value={selectedWork}
-                onChange={(event) => setSelectedWork(event.target.value)}
+                onChange={(event) => {
+                  const selectedOption = event.currentTarget.selectedOptions.item(0);
+                  setSelectedWork(event.target.value);
+                  setSelectedWorkTypeId(selectedOption?.getAttribute('data-work-type-id') ?? null);
+                }}
                 aria-describedby="work-description-hint"
                 className="w-full appearance-none rounded-xl border border-brand-border bg-brand-surface-alt px-4 py-3 pr-10 text-base leading-tight text-brand-text shadow-sm"
               >
@@ -574,7 +581,11 @@ export default function StampCard({
                   選択してください
                 </option>
                 {workTypes.map((wt) => (
-                  <option key={wt.id} value={wt.fields.name}>
+                  <option
+                    key={wt.id}
+                    value={wt.fields.name}
+                    data-work-type-id={typeof wt.id === 'string' ? wt.id : ''}
+                  >
                     {wt.fields.name}
                   </option>
                 ))}
