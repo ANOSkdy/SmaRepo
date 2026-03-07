@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withClient } from '@/lib/db';
+import { handleSessionAfterLogInsert } from '@/lib/services/sessions';
 import { hasDatabaseUrl } from '@/lib/server-env';
 
 export const runtime = 'nodejs';
@@ -92,6 +93,7 @@ export async function GET(req: Request) {
         );
 
         let createdCount = 0;
+        const insertedOutLogIds: string[] = [];
         const forcedBase = parseForcedOutAt(dateJst).getTime();
 
         if (!dryRun) {
@@ -106,10 +108,14 @@ export async function GET(req: Request) {
             const forcedTs = Math.max(minTs, Math.min(forcedBase, maxTs));
             const payload = buildOutPayload(row.payload, new Date(forcedTs).toISOString());
 
-            await client.query(
-              `INSERT INTO logs SELECT * FROM json_populate_record(NULL::logs, $1::json)`,
+            const inserted = await client.query<{ id: string }>(
+              `INSERT INTO logs SELECT * FROM json_populate_record(NULL::logs, $1::json) RETURNING id`,
               [JSON.stringify(payload)],
             );
+            const insertedId = inserted.rows[0]?.id;
+            if (typeof insertedId === 'string' && insertedId.length > 0) {
+              insertedOutLogIds.push(insertedId);
+            }
             createdCount += 1;
           }
         }
@@ -122,12 +128,17 @@ export async function GET(req: Request) {
           createdCount: dryRun ? 0 : createdCount,
           dryRun,
           users: new Set(openIns.rows.map((row) => getUserKey(row.payload))).size,
+          insertedOutLogIds,
         };
       } catch (error) {
         await client.query('ROLLBACK');
         throw error;
       }
     });
+
+    if (!summary.dryRun && Array.isArray(summary.insertedOutLogIds) && summary.insertedOutLogIds.length > 0) {
+      void Promise.allSettled(summary.insertedOutLogIds.map((logId) => handleSessionAfterLogInsert(logId)));
+    }
 
     return NextResponse.json(summary);
   } catch (error) {
