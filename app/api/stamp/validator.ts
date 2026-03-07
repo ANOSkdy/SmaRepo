@@ -5,6 +5,8 @@ export type StampRequest = {
   lon: number;
   accuracy?: number;
   positionTimestamp?: number;
+  positionTimestampMs?: number;
+  workTypeId?: string;
   clientDecision?: 'auto' | 'blocked';
   siteId?: string;
   type: 'IN' | 'OUT';
@@ -21,6 +23,8 @@ export function validateStampRequest(
     typeof body.lon !== 'number' ||
     (body.accuracy !== undefined && typeof body.accuracy !== 'number') ||
     (body.positionTimestamp !== undefined && typeof body.positionTimestamp !== 'number') ||
+    (body.positionTimestampMs !== undefined && typeof body.positionTimestampMs !== 'number') ||
+    (body.workTypeId !== undefined && typeof body.workTypeId !== 'string') ||
     (body.clientDecision !== undefined &&
       body.clientDecision !== 'auto' &&
       body.clientDecision !== 'blocked') ||

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { getSql } from '@/lib/db/neon';
 import { resolveNearestActiveSiteDecision } from '@/lib/stamp/gpsNearest';
+import { resolveWorkTypeId } from '@/lib/stamp/resolveWorkTypeId';
 
 type Sql = ReturnType<typeof getSql>;
 type AuthSessionLike =
@@ -55,6 +56,7 @@ const BodySchema = z
 
     position_timestamp_ms: z.coerce.number().optional(),
     positionTimestampMs: z.coerce.number().optional(),
+    positionTimestamp: z.coerce.number().optional(),
 
     is_cached_position: z.boolean().optional(),
     isCachedPosition: z.boolean().optional(),
@@ -122,7 +124,9 @@ const BodySchema = z
         ? d.position_timestamp_ms
         : typeof d.positionTimestampMs === 'number'
           ? d.positionTimestampMs
-          : null;
+          : typeof d.positionTimestamp === 'number'
+            ? d.positionTimestamp
+            : null;
 
     const isCachedPosition =
       d.is_cached_position ?? d.isCachedPosition ?? false;
@@ -341,7 +345,11 @@ export async function POST(req: Request) {
       }
     }
 
-    const workTypeId = toNullableUuid(input.workTypeRef);
+    const workTypeId = await resolveWorkTypeId(
+      sql,
+      input.workTypeRef,
+      input.workDescription
+    );
 
     const rows = await sql`
       INSERT INTO logs (
