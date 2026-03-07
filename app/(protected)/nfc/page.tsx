@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { hasDatabaseUrl } from "@/lib/server-env";
 import { query } from "@/lib/db";
+import { createNfcAttendanceStateService } from "@/lib/services/nfcAttendanceState";
 import StampCard from "@/components/StampCard";
 import { ROUTES } from "@/src/constants/routes";
 
@@ -22,11 +23,6 @@ type MachineRow = {
   active: boolean;
 };
 
-type TodaySessionRow = {
-  has_open: boolean;
-  latest_work_description_snapshot: string | null;
-};
-
 function toSingleValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return value[0] ?? "";
   return value ?? "";
@@ -36,16 +32,6 @@ function isDigits(value: string): boolean {
   return /^[0-9]+$/.test(value);
 }
 
-
-function getJstWorkDate(date = new Date()): string {
-  // en-CA => YYYY-MM-DD
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Tokyo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
-}
 
 async function resolveActiveMachineByCode(codeText: string): Promise<MachineRow | null> {
   const code = Number.parseInt(codeText, 10);
@@ -121,47 +107,8 @@ export default async function NFCPage({ searchParams }: NFCPageProps) {
     redirect(`/nfc?machineId=${encodeURIComponent(resolvedMachineCodeText)}`);
   }
 
-  // 当日（JST）の session 状態のみで初期状態を決める（前日状態を持ち越さない）
-  const workDate = getJstWorkDate();
-  const todaySessionRes = await query<TodaySessionRow>(
-    `
-      SELECT
-        EXISTS(
-          SELECT 1
-          FROM sessions s
-          WHERE s.user_id = $1::uuid
-            AND s.work_date = $2::date
-            AND s.status = 'open'
-        ) AS has_open,
-        (
-          SELECT s.work_description_snapshot
-          FROM sessions s
-          WHERE s.user_id = $1::uuid
-            AND s.work_date = $2::date
-          ORDER BY s.start_at DESC
-          LIMIT 1
-        ) AS latest_work_description_snapshot
-    `,
-    [session.user.id, workDate]
-  );
-  const todaySession = todaySessionRes.rows[0] ?? null;
-
-  const initialStampType = todaySession?.has_open ? "OUT" : "IN";
-
-  const lastLogRes = await query<{ work_description: string | null }>(
-    `
-      SELECT work_description
-      FROM logs
-      WHERE user_id = $1::uuid
-        AND work_date = $2::date
-      ORDER BY stamped_at DESC
-      LIMIT 1
-    `,
-    [session.user.id, workDate]
-  );
-  const lastLog = lastLogRes.rows[0] ?? null;
-  const initialWorkDescription =
-    todaySession?.latest_work_description_snapshot ?? lastLog?.work_description ?? "";
+  const nfcAttendanceStateService = createNfcAttendanceStateService();
+  const currentAttendanceState = await nfcAttendanceStateService.getCurrentStateForUser(session.user.id);
 
   const machineLabel = `${machine.name}（${machine.machine_code}）`;
 
@@ -170,8 +117,8 @@ export default async function NFCPage({ searchParams }: NFCPageProps) {
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 space-y-6">
         <div className="flex flex-1 items-center justify-center">
           <StampCard
-            initialStampType={initialStampType}
-            initialWorkDescription={initialWorkDescription}
+            initialStampType={currentAttendanceState.stampType}
+            initialWorkDescription={currentAttendanceState.workDescription}
             userName={session.user.name ?? "ゲスト"}
             machineName={machineLabel}
           />
