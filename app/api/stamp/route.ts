@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { auth } from '@/lib/auth';
 import { getSql } from '@/lib/db/neon';
+import { handleSessionAfterLogInsert } from '@/lib/services/sessions';
 import { resolveNearestActiveSiteDecision } from '@/lib/stamp/gpsNearest';
 import { resolveWorkTypeId } from '@/lib/stamp/resolveWorkTypeId';
 
@@ -393,6 +394,13 @@ export async function POST(req: Request) {
       )
       RETURNING id, stamped_at, work_date, user_id, machine_id, stamp_type, nearest_distance_m, within_radius
     `;
+
+    const insertedLogId = (rows?.[0] as { id?: unknown } | undefined)?.id;
+    if (typeof insertedLogId === 'string' && insertedLogId.length > 0) {
+      queueMicrotask(() => {
+        void handleSessionAfterLogInsert(insertedLogId);
+      });
+    }
 
     return NextResponse.json(
       { ok: true, stamp: rows[0], requestId },
