@@ -1,6 +1,11 @@
 {
   "framework": "nextjs",
   "installCommand": "pnpm install --no-frozen-lockfile",
-  "buildCommand": "pnpm build"
+  "buildCommand": "pnpm build",
+  "crons": [
+    {
+      "path": "/api/cron/close-open-sessions",
+      "schedule": "45 14 * * *"
+    }
+  ]
 }
-
