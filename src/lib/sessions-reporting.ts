@@ -222,7 +222,13 @@ export async function fetchNormalizedSessions(params: FetchNormalizedSessionsPar
         s.work_description_snapshot,
         s.user_id::text AS user_id,
         s.machine_id::text AS machine_id,
-        NULLIF(TRIM(m.machineid), '') AS machine_code,
+        COALESCE(
+          NULLIF(TRIM(to_jsonb(m)->>'machineid'), ''),
+          NULLIF(TRIM(to_jsonb(m)->>'machineId'), ''),
+          NULLIF(TRIM(to_jsonb(m)->>'machine_id'), ''),
+          NULLIF(TRIM(to_jsonb(m)->>'machine_code'), ''),
+          NULLIF(TRIM(to_jsonb(m)->>'code'), '')
+        ) AS machine_code,
         COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(u.username), '')) AS user_name,
         NULLIF(TRIM(u.username), '') AS user_code,
         NULLIF(TRIM(m.name), '') AS machine_name
