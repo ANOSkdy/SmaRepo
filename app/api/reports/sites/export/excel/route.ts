@@ -35,6 +35,14 @@ function normalizeMachineIds(value: string | null) {
     .filter((item) => item.length > 0);
 }
 
+function normalizeWorkType(value: string | null): 'all' | 'jyoyo' | 'kado' {
+  const normalized = (value ?? '').trim();
+  if (normalized === 'jyoyo' || normalized === 'kado') {
+    return normalized;
+  }
+  return 'all';
+}
+
 function formatMachineLabel(column: ReportColumn) {
   const ids = Array.isArray(column.machineIds)
     ? column.machineIds
@@ -71,6 +79,7 @@ export async function GET(req: NextRequest) {
   const siteId = (searchParams.get('siteId') ?? '').trim();
   const monthParam = parseMonthParam(searchParams.get('month'));
   const machineIds = normalizeMachineIds(searchParams.get('machineIds'));
+  const workType = normalizeWorkType(searchParams.get('workType'));
 
   if (!monthParam || !siteId) {
     return NextResponse.json({ error: 'month, siteId are required' }, { status: 400 });
@@ -81,6 +90,7 @@ export async function GET(req: NextRequest) {
     month: monthParam.month,
     siteId,
     machineIds,
+    workType,
   });
 
   const workbook = new ExcelJS.Workbook();

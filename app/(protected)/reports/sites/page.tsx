@@ -84,6 +84,7 @@ export default function SiteReportPage() {
   const [siteId, setSiteId] = useState('');
   const [siteClient, setSiteClient] = useState('');
   const [machineFilter, setMachineFilter] = useState<string[]>([]);
+  const [workTypeFilter, setWorkTypeFilter] = useState<'all' | 'jyoyo' | 'kado'>('all');
 
   const [columns, setColumns] = useState<ReportColumn[]>([]);
   const [days, setDays] = useState<DayRow[]>([]);
@@ -225,7 +226,10 @@ export default function SiteReportPage() {
       )
       .map(([id, name]) => ({
         id,
-        name: name.trim().length > 0 ? name : id,
+        name:
+          name.trim().length > 0
+            ? `${name} (${id})`
+            : id,
       }));
   }, [derivedMachineLabels, machines]);
 
@@ -554,8 +558,11 @@ export default function SiteReportPage() {
     if (machineIds.length > 0) {
       params.set('machineIds', machineIds.join(','));
     }
+    if (workTypeFilter !== 'all') {
+      params.set('workType', workTypeFilter);
+    }
     return `/api/reports/sites/export/excel?${params.toString()}`;
-  }, [machineFilter, monthValue, reportLoaded, siteId]);
+  }, [machineFilter, monthValue, reportLoaded, siteId, workTypeFilter]);
 
 
   const handleEmployeeFilterChange = (event: ChangeEvent<HTMLSelectElement>) => {
@@ -589,6 +596,9 @@ export default function SiteReportPage() {
           params.append('machineIds', normalized);
         }
       });
+      if (workTypeFilter !== 'all') {
+        params.set('workType', workTypeFilter);
+      }
       const response = await fetch(`/api/reports/sites?${params.toString()}`, {
         cache: 'no-store',
         credentials: 'same-origin',
@@ -664,6 +674,21 @@ export default function SiteReportPage() {
               onChange={setMachineFilter}
             />
           </div>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm text-gray-600">常用/稼働</span>
+            <select
+              className="rounded border px-3 py-2"
+              value={workTypeFilter}
+              onChange={(event) => {
+                const next = event.target.value;
+                setWorkTypeFilter(next === 'jyoyo' || next === 'kado' ? next : 'all');
+              }}
+            >
+              <option value="all">（すべて）</option>
+              <option value="jyoyo">常用</option>
+              <option value="kado">稼働</option>
+            </select>
+          </label>
         </div>
         <div className="flex items-center gap-3 print-hide">
           <button
@@ -730,9 +755,24 @@ export default function SiteReportPage() {
                       const className = hidden
                         ? 'border px-2 py-1 text-left screen-hidden'
                         : 'border px-2 py-1 text-left';
+                      const machines = getMachineRefs(column.key);
                       return (
                         <th key={`user-${column.key}`} className={className}>
-                          {column.userName}
+                          <div className="font-medium">{column.userName}</div>
+                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs font-normal text-gray-600">
+                            {machines.length > 0 ? (
+                              machines.map((machine) => (
+                                <MachineTag
+                                  key={`${column.key}-${machine.machineId}`}
+                                  id={machine.machineId}
+                                  name={machine.machineName ?? null}
+                                  className="text-xs text-gray-600"
+                                />
+                              ))
+                            ) : (
+                              <MachineTag className="text-xs text-gray-400" />
+                            )}
+                          </div>
                         </th>
                       );
                     })}

@@ -93,11 +93,13 @@ export async function buildSiteReport({
   month,
   siteId,
   machineIds = [],
+  workType = 'all',
 }: {
   year: number;
   month: number;
   siteId: string;
   machineIds?: string[];
+  workType?: 'all' | 'jyoyo' | 'kado';
 }): Promise<SiteReportResult> {
   const daysInMonth = new Date(year, month, 0).getDate();
 
@@ -151,6 +153,15 @@ export async function buildSiteReport({
       }
     }
 
+    const workDescriptionText = session.workDescription?.trim() ?? '';
+    const includesJyoyo = workDescriptionText.includes('常用');
+    if (workType === 'jyoyo' && !includesJyoyo) {
+      continue;
+    }
+    if (workType === 'kado' && includesJyoyo) {
+      continue;
+    }
+
     const rawMinutes =
       session.durationMin ?? (session.hours != null ? Math.round(session.hours * 60) : null);
     const minutes = typeof rawMinutes === 'number' ? Math.round(rawMinutes) : 0;
@@ -164,7 +175,7 @@ export async function buildSiteReport({
       continue;
     }
 
-    const workDescription = session.workDescription?.trim() || '（未設定）';
+    const workDescription = workDescriptionText || '（未設定）';
 
     const userName = session.userName?.trim() || '不明ユーザー';
     const userKey = resolveSessionUserKey(session);
