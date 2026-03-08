@@ -1,6 +1,9 @@
 // app/reports/page.tsx
 import Link from "next/link";
 
+import ReportActionBar from "@/components/reports/ReportActionBar";
+import ReportFilterPanel from "@/components/reports/ReportFilterPanel";
+import ReportPageShell from "@/components/reports/ReportPageShell";
 import ReportsTabs from "@/components/reports/ReportsTabs";
 import {
   buildReportContext,
@@ -47,171 +50,173 @@ export default async function ReportsPage({
     : "";
 
   return (
-    <main className="mx-auto max-w-5xl space-y-6 p-6">
+    <ReportPageShell>
       <ReportsTabs />
       <div className="space-y-6">
         <header className="space-y-2">
-          <h1 className="text-2xl font-semibold text-gray-900">個別集計</h1>
-          <p className="text-sm text-gray-600">従業員ごとのセッション記録から稼働時間を算出します。</p>
+          <h1 className="text-2xl font-semibold text-brand-text">個別集計</h1>
+          <p className="text-sm text-brand-muted">従業員ごとのセッション記録から稼働時間を算出します。</p>
         </header>
 
-        <form className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6" method="get">
-          <div className="flex flex-col">
-            <label htmlFor="user" className="text-sm font-medium text-gray-700">
-              従業員名
-            </label>
-            <select
-              id="user"
-              name="user"
-              defaultValue={filters.user}
-              className="mt-1 min-w-[200px] rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              aria-describedby="user-helper"
-            >
-              <option value="">-- 選択してください --</option>
-              {users.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-            <span id="user-helper" className="mt-1 text-xs text-gray-500">
-              対象の従業員を選ぶとグリッドが表示されます。
-            </span>
-          </div>
+        <ReportFilterPanel>
+          <form className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6" method="get">
+            <div className="flex flex-col">
+              <label htmlFor="user" className="text-sm font-medium text-brand-text">
+                従業員名
+              </label>
+              <select
+                id="user"
+                name="user"
+                defaultValue={filters.user}
+                className="mt-1 min-w-[200px] rounded border border-brand-border bg-brand-surface px-3 py-2 text-sm text-brand-text focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
+                aria-describedby="user-helper"
+              >
+                <option value="">-- 選択してください --</option>
+                {users.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+              <span id="user-helper" className="mt-1 text-xs text-brand-muted">
+                対象の従業員を選ぶとグリッドが表示されます。
+              </span>
+            </div>
 
-          <div className="flex flex-col">
-            <label htmlFor="site" className="text-sm font-medium text-gray-700">
-              現場名
-            </label>
-            <select
-              id="site"
-              name="site"
-              defaultValue={filters.site}
-              disabled={!filters.user}
-              className="mt-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:bg-gray-100"
-            >
-              <option value="">-- すべて --</option>
-              {availableSites.map((site) => (
-                <option key={site} value={site}>
-                  {site}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div className="flex flex-col">
+              <label htmlFor="site" className="text-sm font-medium text-brand-text">
+                現場名
+              </label>
+              <select
+                id="site"
+                name="site"
+                defaultValue={filters.site}
+                disabled={!filters.user}
+                className="mt-1 rounded border border-brand-border bg-brand-surface px-3 py-2 text-sm text-brand-text focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary disabled:cursor-not-allowed disabled:bg-brand-surface-alt"
+              >
+                <option value="">-- すべて --</option>
+                {availableSites.map((site) => (
+                  <option key={site} value={site}>
+                    {site}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div className="flex flex-col">
-            <label htmlFor="year" className="text-sm font-medium text-gray-700">
-              年
-            </label>
-            <select
-              id="year"
-              name="year"
-              defaultValue={filters.year?.toString() ?? ""}
-              disabled={!filters.user}
-              className="mt-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:bg-gray-100"
-            >
-              <option value="">-- すべて --</option>
-              {availableYears.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div className="flex flex-col">
+              <label htmlFor="year" className="text-sm font-medium text-brand-text">
+                年
+              </label>
+              <select
+                id="year"
+                name="year"
+                defaultValue={filters.year?.toString() ?? ""}
+                disabled={!filters.user}
+                className="mt-1 rounded border border-brand-border bg-brand-surface px-3 py-2 text-sm text-brand-text focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary disabled:cursor-not-allowed disabled:bg-brand-surface-alt"
+              >
+                <option value="">-- すべて --</option>
+                {availableYears.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div className="flex flex-col">
-            <label htmlFor="month" className="text-sm font-medium text-gray-700">
-              月
-            </label>
-            <select
-              id="month"
-              name="month"
-              defaultValue={filters.month?.toString() ?? ""}
-              disabled={!filters.user}
-              className="mt-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:bg-gray-100"
-            >
-              <option value="">-- すべて --</option>
-              {availableMonths.map((month) => (
-                <option key={month} value={month}>
-                  {month}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div className="flex flex-col">
+              <label htmlFor="month" className="text-sm font-medium text-brand-text">
+                月
+              </label>
+              <select
+                id="month"
+                name="month"
+                defaultValue={filters.month?.toString() ?? ""}
+                disabled={!filters.user}
+                className="mt-1 rounded border border-brand-border bg-brand-surface px-3 py-2 text-sm text-brand-text focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary disabled:cursor-not-allowed disabled:bg-brand-surface-alt"
+              >
+                <option value="">-- すべて --</option>
+                {availableMonths.map((month) => (
+                  <option key={month} value={month}>
+                    {month}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div className="flex flex-col">
-            <label htmlFor="day" className="text-sm font-medium text-gray-700">
-              日
-            </label>
-            <select
-              id="day"
-              name="day"
-              defaultValue={filters.day?.toString() ?? ""}
-              disabled={!filters.user}
-              className="mt-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:bg-gray-100"
-            >
-              <option value="">-- すべて --</option>
-              {availableDays.map((day) => (
-                <option key={day} value={day}>
-                  {day}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div className="flex flex-col">
+              <label htmlFor="day" className="text-sm font-medium text-brand-text">
+                日
+              </label>
+              <select
+                id="day"
+                name="day"
+                defaultValue={filters.day?.toString() ?? ""}
+                disabled={!filters.user}
+                className="mt-1 rounded border border-brand-border bg-brand-surface px-3 py-2 text-sm text-brand-text focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary disabled:cursor-not-allowed disabled:bg-brand-surface-alt"
+              >
+                <option value="">-- すべて --</option>
+                {availableDays.map((day) => (
+                  <option key={day} value={day}>
+                    {day}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div className="flex flex-col">
-            <label htmlFor="auto" className="text-sm font-medium text-gray-700">
-              自動退勤
-            </label>
-            <select
-              id="auto"
-              name="auto"
-              defaultValue={filters.auto ?? "all"}
-              disabled={!filters.user}
-              className="mt-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:bg-gray-100"
-            >
-              <option value="all">すべて</option>
-              <option value="only">自動のみ</option>
-              <option value="exclude">自動を除外</option>
-            </select>
-          </div>
+            <div className="flex flex-col">
+              <label htmlFor="auto" className="text-sm font-medium text-brand-text">
+                自動退勤
+              </label>
+              <select
+                id="auto"
+                name="auto"
+                defaultValue={filters.auto ?? "all"}
+                disabled={!filters.user}
+                className="mt-1 rounded border border-brand-border bg-brand-surface px-3 py-2 text-sm text-brand-text focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary disabled:cursor-not-allowed disabled:bg-brand-surface-alt"
+              >
+                <option value="all">すべて</option>
+                <option value="only">自動のみ</option>
+                <option value="exclude">自動を除外</option>
+              </select>
+            </div>
 
-          <div className="flex items-end gap-2">
-            <button
-              type="submit"
-              className="inline-flex w-full items-center justify-center rounded border border-primary bg-primary px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-            >
-              絞り込み
-            </button>
-          </div>
-        </form>
+            <div className="sm:col-span-2 lg:col-span-6 flex justify-end">
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center rounded border border-brand-primary bg-brand-primary px-4 py-2 text-sm font-medium text-brand-primaryText transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2"
+              >
+                絞り込み
+              </button>
+            </div>
+          </form>
+        </ReportFilterPanel>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500 _print-hidden">
-          <span>※ グリッドの列構成・表記は現行と同じです。必要に応じて上部のフィルターをご利用ください。</span>
+        <ReportActionBar>
+          <span className="text-xs text-brand-muted">※ グリッドの列構成・表記は現行と同じです。必要に応じて上部のフィルターをご利用ください。</span>
           <div className="flex items-center gap-3">
             {exportUrl ? (
-              <a href={exportUrl} className="rounded border border-primary px-3 py-1 text-primary hover:bg-primary/10">
+              <a href={exportUrl} className="rounded border border-brand-primary px-3 py-1 text-brand-primary hover:bg-brand-primary/10">
                 Excel出力
               </a>
             ) : null}
-            <Link href="/reports" className="text-primary underline">
+            <Link href="/reports" className="text-brand-primary underline">
               条件をクリア
             </Link>
           </div>
-        </div>
+        </ReportActionBar>
 
         {filters.user && (
           <section className="space-y-4">
             {flatItems.length === 0 ? (
-              <div className="rounded border border-dashed border-gray-300 bg-white px-6 py-12 text-center text-sm text-gray-500">
+              <div className="rounded border border-dashed border-brand-border bg-brand-surface px-6 py-12 text-center text-sm text-brand-muted">
                 条件に一致するデータがありません。
               </div>
             ) : (
               <div className="screen-table-wrapper">
-                <div className="overflow-x-auto rounded border">
+                <div className="overflow-x-auto rounded border border-brand-border">
                   <table className="table-unified text-sm">
                     <thead>
-                      <tr className="bg-gray-50 text-gray-700">
+                      <tr className="bg-brand-surface-alt text-brand-text">
                         <th className="border px-3 py-2 text-left font-semibold">年</th>
                         <th className="border px-3 py-2 text-left font-semibold">月</th>
                         <th className="border px-3 py-2 text-left font-semibold">日</th>
@@ -227,7 +232,7 @@ export default async function ReportsPage({
                       </tr>
                     </thead>
 
-                    <tbody className="bg-white text-gray-900">
+                    <tbody className="bg-brand-surface text-brand-text">
                       {sortedItems.map((row) => {
                         const summaryMinutes = row.workingMinutes + row.overtimeMinutes;
                         const totalHoursText = formatHoursFromMinutes(summaryMinutes);
@@ -241,7 +246,7 @@ export default async function ReportsPage({
                         );
 
                         return (
-                          <tr key={rowKey} className="odd:bg-white even:bg-gray-50">
+                          <tr key={rowKey} className="odd:bg-brand-surface even:bg-brand-surface-alt/50">
                             <td className="border px-3 py-2 tabular-nums">{row.year}</td>
                             <td className="border px-3 py-2 tabular-nums">{row.month}</td>
                             <td className="border px-3 py-2 tabular-nums">{row.day}</td>
@@ -270,7 +275,7 @@ export default async function ReportsPage({
                       })}
                     </tbody>
 
-                    <tfoot className="bg-gray-50 text-gray-700">
+                    <tfoot className="bg-brand-surface-alt text-brand-text">
                       <tr>
                         <td className="border px-3 py-2 font-semibold" colSpan={9}>
                           合計
@@ -287,6 +292,6 @@ export default async function ReportsPage({
           </section>
         )}
       </div>
-    </main>
+    </ReportPageShell>
   );
 }

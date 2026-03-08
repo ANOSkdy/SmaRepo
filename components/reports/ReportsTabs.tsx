@@ -13,27 +13,24 @@ export default function ReportsTabs() {
   const pathname = usePathname();
 
   return (
-    <div>
-      <nav className="flex gap-3 border-b border-gray-200 pb-2" aria-label="レポート切替タブ">
-        {REPORT_TABS.map((tab) => {
-          const isActive = pathname === tab.href;
-          return (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              className={
-                isActive
-                  ? 'border-b-2 border-primary pb-1 text-sm font-semibold text-primary'
-                  : 'pb-1 text-sm text-gray-500 transition hover:text-gray-900'
-              }
-              prefetch
-            >
-              {tab.label}
-            </Link>
-          );
-        })}
-
-      </nav>
-    </div>
+    <nav className="flex gap-2 border-b border-brand-border pb-2" aria-label="レポート切替タブ">
+      {REPORT_TABS.map((tab) => {
+        const isActive = pathname === tab.href;
+        return (
+          <Link
+            key={tab.href}
+            href={tab.href}
+            className={
+              isActive
+                ? 'rounded-md border border-brand-primary/20 bg-brand-primary/10 px-3 py-1 text-sm font-semibold text-brand-primary'
+                : 'rounded-md px-3 py-1 text-sm text-brand-muted transition hover:bg-brand-surface-alt hover:text-brand-text'
+            }
+            prefetch
+          >
+            {tab.label}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
