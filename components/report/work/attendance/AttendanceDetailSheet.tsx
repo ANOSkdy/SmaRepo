@@ -12,21 +12,14 @@ type AttendanceSessionDetail = {
   sessionId: string;
   start: string | null;
   end: string | null;
-  durationMin: number | null;
   siteName: string | null;
   machineId: string | number | null;
   machineName: string | null;
   workDescription: string | null;
-  status: string | null;
 };
 
 type AttendanceCalculation = {
-  activeMinutes: number;
-  grossMinutes: number;
-  gapMinutes: number;
-  standardBreakMinutes: number;
   deductBreakMinutes: number;
-  netMinutes: number;
   roundedMinutes: number;
   roundedHours: number;
   anomalies: string[];
@@ -53,14 +46,30 @@ type AttendanceDetailSheetProps = {
   filters: AttendanceDetailFilters;
 };
 
-function formatMinutes(value: number | null | undefined): string {
-  if (value == null || Number.isNaN(value)) return '—';
-  return `${value}分`;
+function roundMinutesToQuarterHours(minutes: number): number {
+  return Math.round(minutes / 15) * 15;
 }
 
-function formatHours(value: number | null | undefined): string {
+function formatRoundedHoursFromMinutes(
+  value: number | null | undefined
+): string {
   if (value == null || Number.isNaN(value)) return '—';
-  return `${value.toFixed(2)}h`;
+  return `${(roundMinutesToQuarterHours(value) / 60).toFixed(1)}h`;
+}
+
+function formatJstDateTime(value: string | null | undefined): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
 }
 
 export default function AttendanceDetailSheet({
@@ -101,15 +110,19 @@ export default function AttendanceDetailSheet({
         params.set('date', date);
         params.set('userId', String(userId));
         if (filters.siteId) params.set('siteId', filters.siteId);
-        if (!filters.siteId && filters.siteName) params.set('siteName', filters.siteName);
+        if (!filters.siteId && filters.siteName)
+          params.set('siteName', filters.siteName);
         if (filters.machineId) params.set('machineId', filters.machineId);
 
-        const response = await fetch(`/api/report/work/attendance/day?${params.toString()}`, {
-          method: 'GET',
-          cache: 'no-store',
-          credentials: 'same-origin',
-          signal: controller.signal,
-        });
+        const response = await fetch(
+          `/api/report/work/attendance/day?${params.toString()}`,
+          {
+            method: 'GET',
+            cache: 'no-store',
+            credentials: 'same-origin',
+            signal: controller.signal,
+          }
+        );
         if (!response.ok) {
           throw new Error(`attendance day error: ${response.status}`);
         }
@@ -127,15 +140,25 @@ export default function AttendanceDetailSheet({
     void load();
 
     return () => controller.abort();
-  }, [date, filters.machineId, filters.siteId, filters.siteName, open, reloadToken, userId]);
+  }, [
+    date,
+    filters.machineId,
+    filters.siteId,
+    filters.siteName,
+    open,
+    reloadToken,
+    userId,
+  ]);
 
   useEffect(() => {
     if (open && dialogRef.current) {
-      previouslyFocusedElement.current = document.activeElement as HTMLElement | null;
+      previouslyFocusedElement.current =
+        document.activeElement as HTMLElement | null;
       const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
       );
-      const initialTarget = closeButtonRef.current ?? focusable.item(0) ?? dialogRef.current;
+      const initialTarget =
+        closeButtonRef.current ?? focusable.item(0) ?? dialogRef.current;
       initialTarget.focus();
     }
 
@@ -179,10 +202,15 @@ export default function AttendanceDetailSheet({
       >
         <div className="flex items-start justify-between border-b border-gray-200 px-6 py-4">
           <div>
-            <h3 id="attendance-detail-title" className="text-lg font-semibold text-gray-900">
+            <h3
+              id="attendance-detail-title"
+              className="text-lg font-semibold text-gray-900"
+            >
               {headerTitle || '勤怠詳細'}
             </h3>
-            <p className="text-sm text-gray-500">日別のセッションと計算内訳を確認できます。</p>
+            <p className="text-sm text-gray-500">
+              日別のセッションと計算内訳を確認できます。
+            </p>
           </div>
           <button
             type="button"
@@ -223,38 +251,52 @@ export default function AttendanceDetailSheet({
           {state === 'success' && detail ? (
             <>
               <section className="space-y-3">
-                <h4 className="text-sm font-semibold text-gray-700">セッション一覧</h4>
+                <h4 className="text-sm font-semibold text-gray-700">
+                  セッション一覧
+                </h4>
                 {detail.sessions.length === 0 ? (
-                  <p className="text-sm text-gray-500">該当するセッションがありません。</p>
+                  <p className="text-sm text-gray-500">
+                    該当するセッションがありません。
+                  </p>
                 ) : (
                   <div className="space-y-3">
                     {detail.sessions.map((session) => (
-                      <div key={session.sessionId} className="rounded-md border border-gray-200 p-3 text-sm">
+                      <div
+                        key={session.sessionId}
+                        className="rounded-md border border-gray-200 p-3 text-sm"
+                      >
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-gray-600">
                           <span>
-                            <span className="font-medium text-gray-700">開始:</span> {session.start ?? '—'}
+                            <span className="font-medium text-gray-700">
+                              開始:
+                            </span>{' '}
+                            {formatJstDateTime(session.start)}
                           </span>
                           <span>
-                            <span className="font-medium text-gray-700">終了:</span> {session.end ?? '—'}
-                          </span>
-                          <span>
-                            <span className="font-medium text-gray-700">稼働:</span>{' '}
-                            {formatMinutes(session.durationMin)}
+                            <span className="font-medium text-gray-700">
+                              終了:
+                            </span>{' '}
+                            {formatJstDateTime(session.end)}
                           </span>
                         </div>
                         <div className="mt-2 text-gray-600">
                           <div>
-                            <span className="font-medium text-gray-700">現場:</span> {session.siteName ?? '—'}
+                            <span className="font-medium text-gray-700">
+                              現場:
+                            </span>{' '}
+                            {session.siteName ?? '—'}
                           </div>
                           <div>
-                            <span className="font-medium text-gray-700">機械:</span>{' '}
+                            <span className="font-medium text-gray-700">
+                              機械:
+                            </span>{' '}
                             {session.machineName ?? session.machineId ?? '—'}
                           </div>
                           <div>
-                            <span className="font-medium text-gray-700">業務:</span> {session.workDescription ?? '—'}
-                          </div>
-                          <div>
-                            <span className="font-medium text-gray-700">状態:</span> {session.status ?? '—'}
+                            <span className="font-medium text-gray-700">
+                              業務:
+                            </span>{' '}
+                            {session.workDescription ?? '—'}
                           </div>
                         </div>
                       </div>
@@ -264,39 +306,25 @@ export default function AttendanceDetailSheet({
               </section>
 
               <section className="space-y-3">
-                <h4 className="text-sm font-semibold text-gray-700">計算内訳</h4>
+                <h4 className="text-sm font-semibold text-gray-700">
+                  計算内訳
+                </h4>
                 <div className="grid gap-2 text-sm text-gray-600">
                   <div className="flex items-center justify-between rounded bg-gray-50 px-3 py-2">
-                    <span>実稼働</span>
-                    <span className="font-medium text-gray-800">{formatMinutes(detail.calculation.activeMinutes)}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded bg-gray-50 px-3 py-2">
-                    <span>拘束</span>
-                    <span className="font-medium text-gray-800">{formatMinutes(detail.calculation.grossMinutes)}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded bg-gray-50 px-3 py-2">
-                    <span>中抜け</span>
-                    <span className="font-medium text-gray-800">{formatMinutes(detail.calculation.gapMinutes)}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded bg-gray-50 px-3 py-2">
-                    <span>標準休憩</span>
+                    <span>休憩</span>
                     <span className="font-medium text-gray-800">
-                      {formatMinutes(detail.calculation.standardBreakMinutes)}
+                      {formatRoundedHoursFromMinutes(
+                        detail.calculation.deductBreakMinutes
+                      )}
                     </span>
-                  </div>
-                  <div className="flex items-center justify-between rounded bg-gray-50 px-3 py-2">
-                    <span>控除休憩</span>
-                    <span className="font-medium text-gray-800">
-                      {formatMinutes(detail.calculation.deductBreakMinutes)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between rounded bg-gray-50 px-3 py-2">
-                    <span>正味稼働</span>
-                    <span className="font-medium text-gray-800">{formatMinutes(detail.calculation.netMinutes)}</span>
                   </div>
                   <div className="flex items-center justify-between rounded bg-indigo-50 px-3 py-2 text-indigo-700">
-                    <span>丸め後</span>
-                    <span className="font-semibold">{formatHours(detail.calculation.roundedHours)}</span>
+                    <span>稼働</span>
+                    <span className="font-semibold">
+                      {formatRoundedHoursFromMinutes(
+                        detail.calculation.roundedMinutes
+                      )}
+                    </span>
                   </div>
                 </div>
                 {detail.calculation.anomalies.length > 0 ? (
