@@ -107,10 +107,10 @@ export async function buildSiteReport({
     const siteRes = await query<{ name: string | null; client: string | null }>(
       `
         SELECT
-          COALESCE(to_jsonb(s)->>'name', to_jsonb(s)->>'siteName') AS name,
-          COALESCE(to_jsonb(s)->>'client', to_jsonb(s)->>'clientName') AS client
+          NULLIF(TRIM(s.name), '') AS name,
+          NULLIF(TRIM(s.client_name), '') AS client
         FROM sites s
-        WHERE COALESCE(to_jsonb(s)->>'id', to_jsonb(s)->>'siteId', '') = $1
+        WHERE s.id::text = $1
         LIMIT 1
       `,
       [siteId],
@@ -123,7 +123,7 @@ export async function buildSiteReport({
 
   const machineIdSet = new Set(machineIds);
   const normalizedSiteName = normalizeText(siteName);
-  const sessions = await fetchSessionReportRows({ year, month });
+  const sessions = await fetchSessionReportRows({ year, month, siteId });
 
   const columnMap = new Map<string, ColumnAccumulator>();
   const minutesByKey = new Map<string, number>();
