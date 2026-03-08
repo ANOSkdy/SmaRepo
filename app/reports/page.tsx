@@ -218,6 +218,7 @@ export default async function ReportsPage({
                         <th className="border px-3 py-2 text-left font-semibold">曜</th>
                         <th className="border px-3 py-2 text-left font-semibold">従業員</th>
                         <th className="border px-3 py-2 text-left font-semibold">現場名</th>
+                        <th className="border px-3 py-2 text-left font-semibold">作業内容</th>
                         <th className="border px-3 py-2 text-left font-semibold">始業</th>
                         <th className="border px-3 py-2 text-left font-semibold">終業</th>
                         <th className="border px-3 py-2 text-right font-semibold">稼働</th>
@@ -247,6 +248,7 @@ export default async function ReportsPage({
                             <td className="border px-3 py-2">{weekdayLabel}</td>
                             <td className="border px-3 py-2">{filters.user || "—"}</td>
                             <td className="border px-3 py-2">{row.siteName || "—"}</td>
+                            <td className="border px-3 py-2">{row.workDescription?.trim() || "—"}</td>
                             <td className="border px-3 py-2 tabular-nums">{row.startJst ?? "—"}</td>
                             <td className="border px-3 py-2 tabular-nums">
                               <div className="flex items-center gap-2">
@@ -270,7 +272,7 @@ export default async function ReportsPage({
 
                     <tfoot className="bg-gray-50 text-gray-700">
                       <tr>
-                        <td className="border px-3 py-2 font-semibold" colSpan={8}>
+                        <td className="border px-3 py-2 font-semibold" colSpan={9}>
                           合計
                         </td>
                         <td className="border px-3 py-2 text-right tabular-nums font-semibold">{formatWorkingHours(totalWorkingMinutes)}</td>

@@ -28,6 +28,7 @@ export type ReportRow = {
   endTimestampMs?: number | null;
   /** 元のセッション稼働分（休憩控除前） */
   durationMinutes?: number | null;
+  workDescription?: string | null;
 };
 
 type DateParts = {
