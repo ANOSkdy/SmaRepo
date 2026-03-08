@@ -170,14 +170,21 @@ export async function aggregateMonthlyAttendance(
   }
 
   rows.sort((a, b) => {
+    const idA = a.userId;
+    const idB = b.userId;
+    if (idA != null && idB != null && idA !== idB) {
+      return idA - idB;
+    }
+    if (idA != null && idB == null) return -1;
+    if (idA == null && idB != null) return 1;
+
     const nameA = a.name ?? '';
     const nameB = b.name ?? '';
-    if (nameA !== nameB) {
-      return nameA.localeCompare(nameB, 'ja');
+    const byName = nameA.localeCompare(nameB, 'ja');
+    if (byName !== 0) {
+      return byName;
     }
-    const idA = a.userId ?? 0;
-    const idB = b.userId ?? 0;
-    return idA - idB;
+    return 0;
   });
 
   const dayTotalsRecord: Record<string, { hours: number; minutesRounded: number }> = {};

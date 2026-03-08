@@ -244,7 +244,17 @@ export async function fetchNormalizedSessions(params: FetchNormalizedSessionsPar
       LEFT JOIN work_types wt_in ON wt_in.id = l_in.work_type_id
       LEFT JOIN work_types wt_out ON wt_out.id = l_out.work_type_id
       ${whereClause}
-      ORDER BY s.work_date ASC, s.start_at ASC, s.id ASC
+      ORDER BY
+        CASE
+          WHEN NULLIF(TRIM(COALESCE(u.username, '')), '') ~ '^[0-9]+$'
+            THEN NULLIF(TRIM(COALESCE(u.username, '')), '')::bigint
+          ELSE NULL
+        END ASC NULLS LAST,
+        COALESCE(NULLIF(TRIM(u.username), ''), '') ASC,
+        COALESCE(NULLIF(TRIM(u.name), ''), '') ASC,
+        s.work_date ASC,
+        s.start_at ASC,
+        s.id ASC
     `,
     values,
   );

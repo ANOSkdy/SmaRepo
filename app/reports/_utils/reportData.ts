@@ -97,7 +97,9 @@ export function parseFilters(searchParams?: SearchParams): Filters {
   };
 }
 
-type UserNameRow = { name: string | null };
+type UserNameRow = {
+  name: string | null;
+};
 
 export async function fetchUsers(): Promise<string[]> {
   const result = await query<UserNameRow>(
@@ -105,7 +107,15 @@ export async function fetchUsers(): Promise<string[]> {
       SELECT COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(u.username), '')) AS name
       FROM users u
       WHERE u.active = true
-      ORDER BY COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(u.username), ''), '') ASC
+      ORDER BY
+        CASE
+          WHEN NULLIF(TRIM(COALESCE(u.username, '')), '') ~ '^[0-9]+$'
+            THEN NULLIF(TRIM(COALESCE(u.username, '')), '')::bigint
+          ELSE NULL
+        END ASC NULLS LAST,
+        COALESCE(NULLIF(TRIM(u.username), ''), '') ASC,
+        COALESCE(NULLIF(TRIM(u.name), ''), '') ASC,
+        u.id ASC
     `
   );
 
@@ -115,7 +125,7 @@ export async function fetchUsers(): Promise<string[]> {
       names.add(row.name.trim());
     }
   }
-  return Array.from(names).sort((a, b) => a.localeCompare(b, "ja"));
+  return Array.from(names);
 }
 
 export function formatQuarterHours(minutes: number): string {
