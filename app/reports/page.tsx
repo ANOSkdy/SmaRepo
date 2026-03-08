@@ -64,7 +64,7 @@ export default async function ReportsPage({
               id="user"
               name="user"
               defaultValue={filters.user}
-              className="mt-1 min-w-[200px] rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="mt-1 min-w-[200px] rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               aria-describedby="user-helper"
             >
               <option value="">-- 選択してください --</option>
@@ -88,7 +88,7 @@ export default async function ReportsPage({
               name="site"
               defaultValue={filters.site}
               disabled={!filters.user}
-              className="mt-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-gray-100"
+              className="mt-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:bg-gray-100"
             >
               <option value="">-- すべて --</option>
               {availableSites.map((site) => (
@@ -108,7 +108,7 @@ export default async function ReportsPage({
               name="year"
               defaultValue={filters.year?.toString() ?? ""}
               disabled={!filters.user}
-              className="mt-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-gray-100"
+              className="mt-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:bg-gray-100"
             >
               <option value="">-- すべて --</option>
               {availableYears.map((year) => (
@@ -128,7 +128,7 @@ export default async function ReportsPage({
               name="month"
               defaultValue={filters.month?.toString() ?? ""}
               disabled={!filters.user}
-              className="mt-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-gray-100"
+              className="mt-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:bg-gray-100"
             >
               <option value="">-- すべて --</option>
               {availableMonths.map((month) => (
@@ -148,7 +148,7 @@ export default async function ReportsPage({
               name="day"
               defaultValue={filters.day?.toString() ?? ""}
               disabled={!filters.user}
-              className="mt-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-gray-100"
+              className="mt-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:bg-gray-100"
             >
               <option value="">-- すべて --</option>
               {availableDays.map((day) => (
@@ -168,7 +168,7 @@ export default async function ReportsPage({
               name="auto"
               defaultValue={filters.auto ?? "all"}
               disabled={!filters.user}
-              className="mt-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-gray-100"
+              className="mt-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:bg-gray-100"
             >
               <option value="all">すべて</option>
               <option value="only">自動のみ</option>
@@ -179,7 +179,7 @@ export default async function ReportsPage({
           <div className="flex items-end gap-2">
             <button
               type="submit"
-              className="inline-flex w-full items-center justify-center rounded border border-indigo-500 bg-indigo-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+              className="inline-flex w-full items-center justify-center rounded border border-primary bg-primary px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
             >
               絞り込み
             </button>
@@ -190,11 +190,11 @@ export default async function ReportsPage({
           <span>※ グリッドの列構成・表記は現行と同じです。必要に応じて上部のフィルターをご利用ください。</span>
           <div className="flex items-center gap-3">
             {exportUrl ? (
-              <a href={exportUrl} className="rounded border border-indigo-500 px-3 py-1 text-indigo-600 hover:bg-indigo-50">
+              <a href={exportUrl} className="rounded border border-primary px-3 py-1 text-primary hover:bg-primary/10">
                 Excel出力
               </a>
             ) : null}
-            <Link href="/reports" className="text-indigo-600 underline">
+            <Link href="/reports" className="text-primary underline">
               条件をクリア
             </Link>
           </div>

@@ -72,7 +72,7 @@ export default function WorkTypeCheckboxGroup({ className, options, value, onCha
                   <input
                     id={`work-type-${option.id}`}
                     type="checkbox"
-                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                     value={option.id}
                     checked={checked}
                     onChange={() => toggle(option.id)}

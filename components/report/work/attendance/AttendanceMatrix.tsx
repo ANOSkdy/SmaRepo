@@ -89,7 +89,7 @@ export default function AttendanceMatrix({
                       key={`${row.name}-${day.date}-base`}
                       className={`border-r border-gray-100 p-0 text-center text-xs ${
                         day.isWeekend ? 'bg-rose-50' : 'bg-white'
-                      } ${isClickable ? 'hover:bg-indigo-50' : 'text-gray-400'}`}
+                      } ${isClickable ? 'hover:bg-primary/10' : 'text-gray-400'}`}
                     >
                       <button
                         type="button"
@@ -169,7 +169,7 @@ export default function AttendanceMatrix({
                       key={`${row.name}-${day.date}-overtime`}
                       className={`border-r border-gray-100 p-0 text-center text-xs ${
                         day.isWeekend ? 'bg-rose-50' : 'bg-white'
-                      } ${isClickable ? 'hover:bg-indigo-50' : 'text-gray-400'}`}
+                      } ${isClickable ? 'hover:bg-primary/10' : 'text-gray-400'}`}
                     >
                       <button
                         type="button"
