@@ -658,21 +658,21 @@ export default function SiteReportPage() {
       </div>
       <div className="space-y-4">
         <h1 className="text-2xl font-semibold text-brand-text">現場別集計</h1>
-        <ReportFilterPanel className="print-hide">
+        <ReportFilterPanel className="print-hide overflow-hidden">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <label className="flex flex-col gap-1">
+          <label className="flex min-w-0 flex-col gap-1">
             <span className="text-sm text-brand-muted">年月</span>
             <input
               type="month"
-              className="rounded border border-brand-border bg-brand-surface px-3 py-2 text-brand-text"
+              className="w-full min-w-0 rounded border border-brand-border bg-brand-surface px-3 py-2 text-brand-text"
               value={monthValue}
               onChange={(event) => setMonthValue(event.target.value)}
             />
           </label>
-          <label className="flex flex-col gap-1">
+          <label className="flex min-w-0 flex-col gap-1">
             <span className="text-sm text-brand-muted">現場名</span>
             <select
-              className="rounded border border-brand-border bg-brand-surface px-3 py-2 text-brand-text"
+              className="w-full min-w-0 rounded border border-brand-border bg-brand-surface px-3 py-2 text-brand-text"
               value={siteId}
               onChange={(event) => setSiteId(event.target.value)}
             >
@@ -684,26 +684,26 @@ export default function SiteReportPage() {
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-1">
+          <label className="flex min-w-0 flex-col gap-1">
             <span className="text-sm text-brand-muted">元請・代理人（自動）</span>
             <input
-              className="rounded border border-brand-border bg-brand-surface-alt px-3 py-2 text-brand-text"
+              className="w-full min-w-0 rounded border border-brand-border bg-brand-surface-alt px-3 py-2 text-brand-text"
               value={siteClient}
               placeholder="現場を選択すると自動入力"
               readOnly
             />
           </label>
-          <div className="xl:col-span-2">
+          <div className="min-w-0 xl:col-span-2">
             <MachineCheckboxGroup
               options={machineOptions}
               value={machineFilter}
               onChange={setMachineFilter}
             />
           </div>
-          <label className="flex flex-col gap-1">
+          <label className="flex min-w-0 flex-col gap-1">
             <span className="text-sm text-brand-muted">常用/稼働/その他</span>
             <select
-              className="rounded border border-brand-border bg-brand-surface px-3 py-2 text-brand-text"
+              className="w-full min-w-0 rounded border border-brand-border bg-brand-surface px-3 py-2 text-brand-text"
               value={workTypeFilter}
               onChange={(event) => {
                 const next = event.target.value;
