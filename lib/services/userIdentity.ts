@@ -5,7 +5,7 @@ type DataRecord<TFields extends Record<string, unknown> = Record<string, unknown
   fields?: TFields;
 };
 
-type AirtableLikeRecord = DataRecord | DataRecord<LogFields>;
+type UserIdentityRecord = DataRecord | DataRecord<LogFields>;
 
 type Identity = {
   employeeCode?: string;
@@ -46,7 +46,7 @@ function findFieldByKeywords(fields: Record<string, unknown>, keywords: string[]
   return undefined;
 }
 
-export function resolveUserIdentity(record: AirtableLikeRecord): Identity {
+export function resolveUserIdentity(record: UserIdentityRecord): Identity {
   const fields = (record && 'fields' in record ? record.fields : undefined) ?? {};
 
   const userLinks = Array.isArray((fields as Record<string, unknown>).user)
@@ -78,7 +78,7 @@ export function resolveUserIdentity(record: AirtableLikeRecord): Identity {
   };
 }
 
-export function resolveUserKey(record: AirtableLikeRecord): string {
+export function resolveUserKey(record: UserIdentityRecord): string {
   const identity = resolveUserIdentity(record);
   return (
     identity.employeeCode ||

@@ -4,11 +4,21 @@ function isNonRetryableError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
   }
-  if (error.name === 'AirtableEnvError') {
+
+  const nonRetryableNames = new Set([
+    'ConfigEnvError',
+    'DatabaseEnvError',
+    'ValidationError',
+  ]);
+  if (nonRetryableNames.has(error.name)) {
     return true;
   }
+
   const message = error.message.toLowerCase();
-  return message.includes('airtable') && (message.includes('env') || message.includes('config') || message.includes('missing'));
+  return (
+    (message.includes('env') || message.includes('config') || message.includes('missing')) &&
+    !message.includes('timeout')
+  );
 }
 
 export async function withRetry<T>(

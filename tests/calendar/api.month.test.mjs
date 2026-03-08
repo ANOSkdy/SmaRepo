@@ -25,22 +25,6 @@ async function loadLogsModule() {
   }
   const originalLoad = Module._load;
   Module._load = function patched(request, parent, isMain) {
-    if (request === '@/lib/airtable') {
-      return {
-        logsTable: {
-          select: () => ({
-            all: async () => {
-              throw new Error('logsTable.select not available in tests');
-            },
-          }),
-        },
-        usersTable: {
-          select: () => ({
-            all: async () => [],
-          }),
-        },
-      };
-    }
     return originalLoad.call(this, request, parent, isMain);
   };
   try {

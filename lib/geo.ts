@@ -1,5 +1,4 @@
-import { SiteFields } from '@/types';
-import { Record } from 'airtable';
+import { DataRecord, SiteFields } from '@/types';
 
 type Polygon = {
   type: 'Polygon';
@@ -14,7 +13,7 @@ type MultiPolygon = {
 export type Geometry = Polygon | MultiPolygon;
 export type DecisionMethod = 'gps_polygon' | 'gps_nearest';
 export type NearestResult = {
-  site: Record<SiteFields> | null;
+  site: DataRecord<SiteFields> | null;
   method: DecisionMethod;
   nearestDistanceM: number | null;
 };
@@ -109,7 +108,7 @@ export const pointInGeometry = (
 export const findNearestSiteDetailed = (
   lat: number,
   lon: number,
-  sites: readonly Record<SiteFields>[]
+  sites: readonly DataRecord<SiteFields>[]
 ): NearestResult => {
   if (sites.length === 0) {
     return { site: null, method: 'gps_nearest', nearestDistanceM: null };
@@ -122,7 +121,7 @@ export const findNearestSiteDetailed = (
     }
   }
 
-  let nearestSite: Record<SiteFields> | null = null;
+  let nearestSite: DataRecord<SiteFields> | null = null;
   let minDistance = Infinity;
 
   for (const site of sites) {
@@ -143,6 +142,6 @@ export const findNearestSiteDetailed = (
 export const findNearestSite = (
   lat: number,
   lon: number,
-  sites: readonly Record<SiteFields>[]
-): Record<SiteFields> | null =>
+  sites: readonly DataRecord<SiteFields>[]
+): DataRecord<SiteFields> | null =>
   findNearestSiteDetailed(lat, lon, sites).site;

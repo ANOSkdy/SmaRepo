@@ -2,6 +2,11 @@ import type { LogDto, MachineDto, SiteDto, WorkTypeDto } from './domain';
 
 type FieldValue = string | number | boolean | readonly string[] | undefined;
 
+export type DataRecord<TFields extends Record<string, unknown>> = {
+  id: string;
+  fields: TFields;
+};
+
 // 各テーブルのフィールドの型定義
 export interface UserFields {
   [key: string]: FieldValue;
