@@ -47,7 +47,6 @@ export default function AttendanceMonthlyTab() {
     <section className="space-y-6">
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold text-brand-text">勤怠（月次）</h1>
-        <p className="text-sm text-brand-muted">稼働時間を月次マトリクスで確認できます。</p>
       </header>
 
       <ReportFilterPanel>
