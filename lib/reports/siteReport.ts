@@ -99,7 +99,7 @@ export async function buildSiteReport({
   month: number;
   siteId: string;
   machineIds?: string[];
-  workType?: 'all' | 'jyoyo' | 'kado';
+  workType?: 'all' | 'regular' | 'operating' | 'other';
 }): Promise<SiteReportResult> {
   const daysInMonth = new Date(year, month, 0).getDate();
 
@@ -154,11 +154,14 @@ export async function buildSiteReport({
     }
 
     const workDescriptionText = session.workDescription?.trim() ?? '';
-    const includesJyoyo = workDescriptionText.includes('常用');
-    if (workType === 'jyoyo' && !includesJyoyo) {
+    const category = session.workTypeCategory;
+    if (workType === 'regular' && category !== 'regular') {
       continue;
     }
-    if (workType === 'kado' && includesJyoyo) {
+    if (workType === 'operating' && category !== 'operating') {
+      continue;
+    }
+    if (workType === 'other' && category != null && category !== 'other') {
       continue;
     }
 

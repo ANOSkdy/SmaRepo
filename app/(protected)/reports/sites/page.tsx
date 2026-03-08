@@ -83,7 +83,7 @@ export default function SiteReportPage() {
   const [siteId, setSiteId] = useState('');
   const [siteClient, setSiteClient] = useState('');
   const [machineFilter, setMachineFilter] = useState<string[]>([]);
-  const [workTypeFilter, setWorkTypeFilter] = useState<'all' | 'jyoyo' | 'kado'>('all');
+  const [workTypeFilter, setWorkTypeFilter] = useState<'all' | 'regular' | 'operating' | 'other'>('all');
 
   const [columns, setColumns] = useState<ReportColumn[]>([]);
   const [days, setDays] = useState<DayRow[]>([]);
@@ -703,18 +703,19 @@ export default function SiteReportPage() {
             />
           </div>
           <label className="flex flex-col gap-1">
-            <span className="text-sm text-gray-600">常用/稼働</span>
+            <span className="text-sm text-gray-600">常用/稼働/その他</span>
             <select
               className="rounded border px-3 py-2"
               value={workTypeFilter}
               onChange={(event) => {
                 const next = event.target.value;
-                setWorkTypeFilter(next === 'jyoyo' || next === 'kado' ? next : 'all');
+                setWorkTypeFilter(next === 'regular' || next === 'operating' || next === 'other' ? next : 'all');
               }}
             >
               <option value="all">（すべて）</option>
-              <option value="jyoyo">常用</option>
-              <option value="kado">稼働</option>
+              <option value="regular">常用</option>
+              <option value="operating">稼働</option>
+              <option value="other">その他</option>
             </select>
           </label>
         </div>
