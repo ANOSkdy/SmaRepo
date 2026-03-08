@@ -5,7 +5,6 @@ import './sites.css';
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ChangeEvent } from 'react';
 import ReportsTabs from '@/components/reports/ReportsTabs';
 import { getJstParts } from '@/lib/jstDate';
-import MachineTag from '@/components/MachineTag';
 import { compareMachineId } from '@/lib/utils/sort';
 import MachineCheckboxGroup from './_components/MachineCheckboxGroup';
 import { formatQuarterHours, sumColumnHours, toMachineHeader, type SessionRow } from './_lib/gridUtils';
@@ -755,24 +754,9 @@ export default function SiteReportPage() {
                       const className = hidden
                         ? 'border px-2 py-1 text-left screen-hidden'
                         : 'border px-2 py-1 text-left';
-                      const machines = getMachineRefs(column.key);
                       return (
                         <th key={`user-${column.key}`} className={className}>
-                          <div className="font-medium">{column.userName}</div>
-                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs font-normal text-gray-600">
-                            {machines.length > 0 ? (
-                              machines.map((machine) => (
-                                <MachineTag
-                                  key={`${column.key}-${machine.machineId}`}
-                                  id={machine.machineId}
-                                  name={machine.machineName ?? null}
-                                  className="text-xs text-gray-600"
-                                />
-                              ))
-                            ) : (
-                              <MachineTag className="text-xs text-gray-400" />
-                            )}
-                          </div>
+                          {column.userName}
                         </th>
                       );
                     })}
@@ -795,15 +779,27 @@ export default function SiteReportPage() {
                         <th key={`work-${column.key}`} className={className}>
                           <div className="flex flex-wrap gap-x-3 gap-y-1">
                             {machines.length > 0 ? (
-                              machines.map((machine) => (
-                                <MachineTag
-                                  key={machine.machineId}
-                                  id={machine.machineId}
-                                  name={machine.machineName ?? null}
-                                />
-                              ))
+                              machines.map((machine) => {
+                                const machineCode =
+                                  machine.machineId == null ? '' : String(machine.machineId).trim();
+                                const machineName =
+                                  typeof machine.machineName === 'string' ? machine.machineName.trim() : '';
+                                const label =
+                                  machineCode && machineName
+                                    ? `${machineCode}/${machineName}`
+                                    : machineCode || machineName || '—';
+                                return (
+                                  <span
+                                    key={machine.machineId}
+                                    className="max-w-[280px] truncate text-sm text-brand-text"
+                                    title={label}
+                                  >
+                                    {label}
+                                  </span>
+                                );
+                              })
                             ) : (
-                              <MachineTag />
+                              <span className="text-sm text-brand-muted">—</span>
                             )}
                           </div>
                         </th>
