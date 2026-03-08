@@ -15,13 +15,6 @@ function parseDate(req: NextRequest): string | null {
   return date;
 }
 
-type ViewerRow = {
-  id: string;
-  role: string | null;
-  name: string | null;
-  username: string | null;
-};
-
 type DayLogRow = {
   id: string;
   stampedAt: string; // ISO
@@ -230,28 +223,6 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // viewer role をDBから確定（sessionにroleが無い前提）
-    const viewerRes = await query<ViewerRow>(
-      `
-        SELECT id::text as id, role, name, username
-        FROM users
-        WHERE id = $1::uuid
-        LIMIT 1
-      `,
-      [viewerId]
-    );
-    const viewer = viewerRes.rows[0] ?? null;
-    const isAdmin = (viewer?.role ?? "").toLowerCase() === "admin";
-
-    // admin は当日の全ユーザー分を返す（UIが「ユーザーごとの概要」を出す前提に合う）
-    // 非adminは自分のみ
-    const params: unknown[] = [date];
-    let where = `l.work_date = $1::date`;
-    if (!isAdmin) {
-      params.push(viewerId);
-      where += ` AND l.user_id = $2::uuid`;
-    }
-
     const res = await query<DayLogRow>(
       `
         SELECT
@@ -274,10 +245,10 @@ export async function GET(req: NextRequest) {
         FROM logs l
         LEFT JOIN users u ON u.id = l.user_id
         LEFT JOIN machines m ON m.id = l.machine_id
-        WHERE ${where}
+        WHERE l.work_date = $1::date
         ORDER BY l.user_id ASC, l.stamped_at ASC
       `,
-      params
+      [date]
     );
 
     const logs = res.rows;
@@ -313,17 +284,14 @@ export async function GET(req: NextRequest) {
       logCount: logs.length,
       sessionCount: allSessions.length,
       durationMs: Date.now() - startedAt,
-      scope: isAdmin ? "all" : "self",
+      scope: "all",
     });
 
     return NextResponse.json({
       date,
-      scope: isAdmin ? "all" : "self",
+      scope: "all",
       viewer: {
-        id: viewer?.id ?? viewerId,
-        role: viewer?.role ?? null,
-        name: viewer?.name ?? null,
-        username: viewer?.username ?? null,
+        id: viewerId,
       },
       summaries, // UIが「ユーザーごとの概要」を期待してる場合はこちらを使える
       sessions: allSessions, // 既存UIが sessions[] を期待していてもOK
