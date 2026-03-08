@@ -5,7 +5,6 @@ import './sites.css';
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ChangeEvent } from 'react';
 import ReportsTabs from '@/components/reports/ReportsTabs';
 import { getJstParts } from '@/lib/jstDate';
-import MachineTag from '@/components/MachineTag';
 import { compareMachineId } from '@/lib/utils/sort';
 import MachineCheckboxGroup from './_components/MachineCheckboxGroup';
 import { formatQuarterHours, sumColumnHours, toMachineHeader, type SessionRow } from './_lib/gridUtils';
@@ -84,6 +83,7 @@ export default function SiteReportPage() {
   const [siteId, setSiteId] = useState('');
   const [siteClient, setSiteClient] = useState('');
   const [machineFilter, setMachineFilter] = useState<string[]>([]);
+  const [workTypeFilter, setWorkTypeFilter] = useState<'all' | 'jyoyo' | 'kado'>('all');
 
   const [columns, setColumns] = useState<ReportColumn[]>([]);
   const [days, setDays] = useState<DayRow[]>([]);
@@ -198,14 +198,45 @@ export default function SiteReportPage() {
 
   const machineOptions = useMemo(() => {
     const map = new Map<string, string>();
+
+    const normalizeMachineCode = (value: unknown) => {
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        return trimmed.length > 0 ? trimmed : '';
+      }
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return String(value);
+      }
+      return '';
+    };
+
+    const resolveMachineCode = (machine: MachineMaster) => {
+      const fields = machine.fields as Record<string, unknown> | undefined;
+      const candidates = [
+        fields?.machineid,
+        fields?.machineId,
+        fields?.machine_id,
+        fields?.machinecode,
+        fields?.machine_code,
+        fields?.code,
+      ];
+      for (const candidate of candidates) {
+        const code = normalizeMachineCode(candidate);
+        if (code) {
+          return code;
+        }
+      }
+      return '';
+    };
+
     derivedMachineLabels.forEach((label, id) => {
       map.set(id, label);
     });
+
     machines.forEach((machine) => {
-      const machineIdRaw =
-        typeof machine.fields?.machineid === 'string' ? machine.fields.machineid.trim() : '';
+      const machineCode = resolveMachineCode(machine);
       const fallbackId = typeof machine.id === 'string' ? machine.id.trim() : String(machine.id);
-      const id = machineIdRaw || fallbackId;
+      const id = machineCode || fallbackId;
       if (!id) {
         return;
       }
@@ -215,6 +246,7 @@ export default function SiteReportPage() {
       const label = nameRaw || existing || id;
       map.set(id, label);
     });
+
     return Array.from(map.entries())
       .filter(([id]) => id.trim().length > 0)
       .sort((a, b) =>
@@ -225,7 +257,7 @@ export default function SiteReportPage() {
       )
       .map(([id, name]) => ({
         id,
-        name: name.trim().length > 0 ? name : id,
+        name: name.trim().length > 0 ? `${name} (${id})` : id,
       }));
   }, [derivedMachineLabels, machines]);
 
@@ -554,8 +586,11 @@ export default function SiteReportPage() {
     if (machineIds.length > 0) {
       params.set('machineIds', machineIds.join(','));
     }
+    if (workTypeFilter !== 'all') {
+      params.set('workType', workTypeFilter);
+    }
     return `/api/reports/sites/export/excel?${params.toString()}`;
-  }, [machineFilter, monthValue, reportLoaded, siteId]);
+  }, [machineFilter, monthValue, reportLoaded, siteId, workTypeFilter]);
 
 
   const handleEmployeeFilterChange = (event: ChangeEvent<HTMLSelectElement>) => {
@@ -589,6 +624,9 @@ export default function SiteReportPage() {
           params.append('machineIds', normalized);
         }
       });
+      if (workTypeFilter !== 'all') {
+        params.set('workType', workTypeFilter);
+      }
       const response = await fetch(`/api/reports/sites?${params.toString()}`, {
         cache: 'no-store',
         credentials: 'same-origin',
@@ -664,6 +702,21 @@ export default function SiteReportPage() {
               onChange={setMachineFilter}
             />
           </div>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm text-gray-600">常用/稼働</span>
+            <select
+              className="rounded border px-3 py-2"
+              value={workTypeFilter}
+              onChange={(event) => {
+                const next = event.target.value;
+                setWorkTypeFilter(next === 'jyoyo' || next === 'kado' ? next : 'all');
+              }}
+            >
+              <option value="all">（すべて）</option>
+              <option value="jyoyo">常用</option>
+              <option value="kado">稼働</option>
+            </select>
+          </label>
         </div>
         <div className="flex items-center gap-3 print-hide">
           <button
@@ -755,15 +808,27 @@ export default function SiteReportPage() {
                         <th key={`work-${column.key}`} className={className}>
                           <div className="flex flex-wrap gap-x-3 gap-y-1">
                             {machines.length > 0 ? (
-                              machines.map((machine) => (
-                                <MachineTag
-                                  key={machine.machineId}
-                                  id={machine.machineId}
-                                  name={machine.machineName ?? null}
-                                />
-                              ))
+                              machines.map((machine) => {
+                                const machineCode =
+                                  machine.machineId == null ? '' : String(machine.machineId).trim();
+                                const machineName =
+                                  typeof machine.machineName === 'string' ? machine.machineName.trim() : '';
+                                const label =
+                                  machineCode && machineName
+                                    ? `${machineCode}/${machineName}`
+                                    : machineCode || machineName || '—';
+                                return (
+                                  <span
+                                    key={machine.machineId}
+                                    className="max-w-[280px] truncate text-sm text-brand-text"
+                                    title={label}
+                                  >
+                                    {label}
+                                  </span>
+                                );
+                              })
                             ) : (
-                              <MachineTag />
+                              <span className="text-sm text-brand-muted">—</span>
                             )}
                           </div>
                         </th>

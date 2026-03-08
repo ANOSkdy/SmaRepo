@@ -24,6 +24,11 @@ export async function GET(req: NextRequest) {
     .flatMap((value) => value.split(','))
     .map((value) => value.trim())
     .filter(Boolean);
+  const workTypeParam = (searchParams.get('workType') ?? '').trim();
+  const workType =
+    workTypeParam === 'jyoyo' || workTypeParam === 'kado'
+      ? workTypeParam
+      : 'all';
 
   if (!Number.isFinite(year) || !Number.isFinite(month) || !siteId) {
     return NextResponse.json({ error: 'year, month, siteId are required' }, { status: 400 });
@@ -35,6 +40,7 @@ export async function GET(req: NextRequest) {
       month,
       siteId,
       machineIds: machineIdsFilter,
+      workType,
     });
 
     return NextResponse.json(report);

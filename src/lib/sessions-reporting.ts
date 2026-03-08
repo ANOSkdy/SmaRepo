@@ -61,6 +61,7 @@ type SessionDbRow = {
   work_description_snapshot: string | null;
   user_id: string | null;
   machine_id: string | null;
+  machine_code: string | null;
   user_name: string | null;
   user_code: string | null;
   machine_name: string | null;
@@ -132,7 +133,7 @@ export function mapSessionRow(row: SessionDbRow): NormalizedSessionRow {
     userId: asNumber(row.user_code),
     userRecordId: asString(row.user_id),
     userName: asString(row.user_name),
-    machineId: asString(row.machine_id),
+    machineId: asString(row.machine_code) ?? asString(row.machine_id),
     machineRecordId: asString(row.machine_id),
     machineName: asString(row.machine_name),
     status,
@@ -221,6 +222,13 @@ export async function fetchNormalizedSessions(params: FetchNormalizedSessionsPar
         s.work_description_snapshot,
         s.user_id::text AS user_id,
         s.machine_id::text AS machine_id,
+        COALESCE(
+          NULLIF(TRIM(to_jsonb(m)->>'machineid'), ''),
+          NULLIF(TRIM(to_jsonb(m)->>'machineId'), ''),
+          NULLIF(TRIM(to_jsonb(m)->>'machine_id'), ''),
+          NULLIF(TRIM(to_jsonb(m)->>'machine_code'), ''),
+          NULLIF(TRIM(to_jsonb(m)->>'code'), '')
+        ) AS machine_code,
         COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(u.username), '')) AS user_name,
         NULLIF(TRIM(u.username), '') AS user_code,
         NULLIF(TRIM(m.name), '') AS machine_name
