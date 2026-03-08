@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { auth } from '@/lib/auth';
-import { usersTable } from '@/lib/airtable';
+import { query } from '@/lib/db';
 import { resolveUserIdentity } from '@/lib/services/userIdentity';
 
 type Role = 'admin' | 'user' | string;
@@ -9,6 +9,10 @@ type Role = 'admin' | 'user' | string;
 type SessionLike = {
   user?: Record<string, unknown> | null;
 } | null;
+
+type UserRoleRow = {
+  role: unknown;
+};
 
 function normalizeRoleString(value: string): Role {
   const trimmed = value.trim();
@@ -58,12 +62,17 @@ function uniqueStrings(values: Array<unknown>): string[] {
   return Array.from(result);
 }
 
-function looksLikeRecordId(value: string): boolean {
-  return value.startsWith('rec');
-}
-
-function escapeFormulaValue(value: string): string {
-  return value.replace(/'/g, "\\'");
+async function queryUserRoleBy(field: 'id' | 'user_id' | 'name' | 'username' | 'email', value: string): Promise<Role | null> {
+  const sql = `
+    SELECT role
+    FROM users
+    WHERE ${field} = $1
+      AND active = true
+    ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+    LIMIT 1
+  `;
+  const res = await query<UserRoleRow>(sql, [value]);
+  return normRole(res.rows[0]?.role ?? null);
 }
 
 export async function getCurrentUserRole(): Promise<Role> {
@@ -76,73 +85,62 @@ export async function getCurrentUserRole(): Promise<Role> {
 
   const identity = sessionUser ? resolveUserIdentity({ fields: sessionUser }) : undefined;
 
-  const recordIdCandidates = uniqueStrings([
+  const candidateIds = uniqueStrings([
     sessionUser?.id,
+    sessionUser?.userId,
     identity?.userRecId,
+    identity?.employeeCode,
   ]);
 
-  for (const recordId of recordIdCandidates) {
-    if (!looksLikeRecordId(recordId)) continue;
+  for (const id of candidateIds) {
     try {
-      const record = await usersTable.find(recordId);
-      const roleFromRecord = normRole(record.get('role'));
-      if (roleFromRecord) {
-        return roleFromRecord;
-      }
+      const byIdRole = await queryUserRoleBy('id', id);
+      if (byIdRole) return byIdRole;
     } catch {
-      // ignore and fall through to the formula-based lookup
+      // ignore and continue to fallback keys
+    }
+    try {
+      const byUserIdRole = await queryUserRoleBy('user_id', id);
+      if (byUserIdRole) return byUserIdRole;
+    } catch {
+      // ignore and continue to fallback keys
     }
   }
 
-  const candidateUserIds = uniqueStrings([
-    sessionUser?.userId,
-    identity?.employeeCode,
-  ]);
   const candidateUsernames = uniqueStrings([
     sessionUser?.username,
     identity?.username,
   ]);
+  for (const username of candidateUsernames) {
+    try {
+      const role = await queryUserRoleBy('username', username);
+      if (role) return role;
+    } catch {
+      // ignore and continue
+    }
+  }
+
+  const candidateNames = uniqueStrings([sessionUser?.name]);
+  for (const name of candidateNames) {
+    try {
+      const role = await queryUserRoleBy('name', name);
+      if (role) return role;
+    } catch {
+      // ignore and continue
+    }
+  }
+
   const candidateEmails = uniqueStrings([
     sessionUser?.email,
     sessionUser?.login,
   ]);
-
-  const formulaParts: string[] = [];
-  for (const userId of candidateUserIds) {
-    formulaParts.push(`({userId}='${escapeFormulaValue(userId)}')`);
-  }
-  for (const username of candidateUsernames) {
-    formulaParts.push(`({username}='${escapeFormulaValue(username)}')`);
-  }
   for (const email of candidateEmails) {
-    formulaParts.push(`({email}='${escapeFormulaValue(email)}')`);
-  }
-
-  if (formulaParts.length === 0) {
-    return 'user';
-  }
-
-  const formula =
-    formulaParts.length === 1 ? formulaParts[0] : `OR(${formulaParts.join(',')})`;
-
-  try {
-    const page = await usersTable
-      .select({
-        filterByFormula: formula,
-        fields: ['role'],
-        maxRecords: 1,
-      })
-      .firstPage();
-
-    const record = page?.[0];
-    if (record) {
-      const role = normRole(record.get('role'));
-      if (role) {
-        return role;
-      }
+    try {
+      const role = await queryUserRoleBy('email', email);
+      if (role) return role;
+    } catch {
+      // ignore and continue
     }
-  } catch {
-    // fall through to default role
   }
 
   return 'user';

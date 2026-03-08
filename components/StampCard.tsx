@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { SiteFields, WorkTypeFields } from '@/types';
-import { Record } from 'airtable';
+import { DataRecord, SiteFields, WorkTypeFields } from '@/types';
 import LogoutButton from './LogoutButton';
 import A11yButton from './A11yButton';
 import { extractGeometry, findNearestSite, pointInGeometry } from '@/lib/geo';
@@ -295,8 +294,8 @@ export default function StampCard({
     }
   });
   const [stampType, setStampType] = useState<'IN' | 'OUT' | 'COMPLETED'>(initialStampType);
-  const [workTypes, setWorkTypes] = useState<Record<WorkTypeFields>[]>([]);
-  const [sites, setSites] = useState<Record<SiteFields>[]>([]);
+  const [workTypes, setWorkTypes] = useState<DataRecord<WorkTypeFields>[]>([]);
+  const [sites, setSites] = useState<DataRecord<SiteFields>[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [warning, setWarning] = useState('');
