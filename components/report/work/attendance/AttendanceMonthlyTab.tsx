@@ -1,6 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import ReportActionBar from '@/components/reports/ReportActionBar';
+import ReportFilterPanel from '@/components/reports/ReportFilterPanel';
 import AttendanceDetailSheet from './AttendanceDetailSheet';
 import AttendanceMatrix from './AttendanceMatrix';
 import { buildAttendanceQuery } from './buildAttendanceQuery';
@@ -44,23 +46,23 @@ export default function AttendanceMonthlyTab() {
   return (
     <section className="space-y-6">
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold text-gray-900">勤怠（月次）</h1>
-        <p className="text-sm text-gray-500">稼働時間を月次マトリクスで確認できます。</p>
+        <h1 className="text-2xl font-semibold text-brand-text">勤怠（月次）</h1>
       </header>
 
-      <div className="grid gap-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm md:grid-cols-2">
-        <label htmlFor="attendance-month" className="flex flex-col gap-2 text-sm font-medium text-gray-700">
+      <ReportFilterPanel>
+        <div className="grid gap-4 md:grid-cols-2">
+        <label htmlFor="attendance-month" className="flex flex-col gap-2 text-sm font-medium text-brand-text">
           月
           <input
             id="attendance-month"
             type="month"
             value={month}
             onChange={(event) => setMonth(event.target.value)}
-            className="rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="rounded border border-brand-border bg-brand-surface px-3 py-2 text-sm text-brand-text focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
           />
         </label>
 
-        <label htmlFor="attendance-employee-search" className="flex flex-col gap-2 text-sm font-medium text-gray-700">
+        <label htmlFor="attendance-employee-search" className="flex flex-col gap-2 text-sm font-medium text-brand-text">
           従業員検索
           <input
             id="attendance-employee-search"
@@ -68,11 +70,11 @@ export default function AttendanceMonthlyTab() {
             placeholder="名前で検索"
             value={employeeQuery}
             onChange={(event) => setEmployeeQuery(event.target.value)}
-            className="rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="rounded border border-brand-border bg-brand-surface px-3 py-2 text-sm text-brand-text focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
           />
         </label>
-
-      </div>
+        </div>
+      </ReportFilterPanel>
 
       {state === 'loading' ? (
         <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-500 shadow-sm">
@@ -98,14 +100,14 @@ export default function AttendanceMonthlyTab() {
       {state === 'success' && data ? (
         filteredRows.length > 0 ? (
           <div className="space-y-3">
-            <div className="flex items-center justify-end">
+            <ReportActionBar className="justify-end">
               <a
                 href={exportUrl}
-                className="inline-flex items-center gap-2 rounded border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20"
+                className="inline-flex items-center gap-2 rounded border border-brand-primary px-3 py-1 text-xs font-medium text-brand-primary hover:bg-brand-primary/10"
               >
                 Excel出力
               </a>
-            </div>
+            </ReportActionBar>
             <AttendanceMatrix
               days={data.days}
               rows={filteredRows}

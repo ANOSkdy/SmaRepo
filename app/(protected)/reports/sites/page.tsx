@@ -2,7 +2,11 @@
 
 import './sites.css';
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import FilterChipGroup from '@/components/reports/FilterChipGroup';
+import ReportActionBar from '@/components/reports/ReportActionBar';
+import ReportFilterPanel from '@/components/reports/ReportFilterPanel';
+import ReportPageShell from '@/components/reports/ReportPageShell';
 import ReportsTabs from '@/components/reports/ReportsTabs';
 import { getJstParts } from '@/lib/jstDate';
 import { compareMachineId } from '@/lib/utils/sort';
@@ -593,13 +597,6 @@ export default function SiteReportPage() {
   }, [machineFilter, monthValue, reportLoaded, siteId, workTypeFilter]);
 
 
-  const handleEmployeeFilterChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const values = Array.from(event.target.selectedOptions)
-      .map((option) => option.value)
-      .filter((name) => name);
-    setEmployeeFilter(values);
-  };
-
   const handleEmployeeFilterReset = () => {
     setEmployeeFilter([]);
   };
@@ -655,26 +652,27 @@ export default function SiteReportPage() {
   const isReady = Boolean(siteId) && Number.isFinite(year) && Number.isFinite(month);
 
   return (
-    <div className="p-4 space-y-6">
+    <ReportPageShell>
       <div className="print-hide">
         <ReportsTabs />
       </div>
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">現場別集計</h1>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 print-hide">
+        <h1 className="text-2xl font-semibold text-brand-text">現場別集計</h1>
+        <ReportFilterPanel className="print-hide">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <label className="flex flex-col gap-1">
-            <span className="text-sm text-gray-600">年月</span>
+            <span className="text-sm text-brand-muted">年月</span>
             <input
               type="month"
-              className="rounded border px-3 py-2"
+              className="rounded border border-brand-border bg-brand-surface px-3 py-2 text-brand-text"
               value={monthValue}
               onChange={(event) => setMonthValue(event.target.value)}
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-sm text-gray-600">現場名</span>
+            <span className="text-sm text-brand-muted">現場名</span>
             <select
-              className="rounded border px-3 py-2"
+              className="rounded border border-brand-border bg-brand-surface px-3 py-2 text-brand-text"
               value={siteId}
               onChange={(event) => setSiteId(event.target.value)}
             >
@@ -687,9 +685,9 @@ export default function SiteReportPage() {
             </select>
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-sm text-gray-600">元請・代理人（自動）</span>
+            <span className="text-sm text-brand-muted">元請・代理人（自動）</span>
             <input
-              className="rounded border px-3 py-2 bg-gray-50"
+              className="rounded border border-brand-border bg-brand-surface-alt px-3 py-2 text-brand-text"
               value={siteClient}
               placeholder="現場を選択すると自動入力"
               readOnly
@@ -703,9 +701,9 @@ export default function SiteReportPage() {
             />
           </div>
           <label className="flex flex-col gap-1">
-            <span className="text-sm text-gray-600">常用/稼働/その他</span>
+            <span className="text-sm text-brand-muted">常用/稼働/その他</span>
             <select
-              className="rounded border px-3 py-2"
+              className="rounded border border-brand-border bg-brand-surface px-3 py-2 text-brand-text"
               value={workTypeFilter}
               onChange={(event) => {
                 const next = event.target.value;
@@ -718,44 +716,37 @@ export default function SiteReportPage() {
               <option value="other">その他</option>
             </select>
           </label>
-        </div>
-        <div className="flex items-center gap-3 print-hide">
+          </div>
+        </ReportFilterPanel>
+        <ReportActionBar className="print-hide">
+          <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={loadReport}
             disabled={!isReady || loading}
-            className="rounded bg-primary px-4 py-2 text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded bg-brand-primary px-4 py-2 text-brand-primaryText transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? '集計中…' : '集計する'}
           </button>
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
-        </div>
+          </div>
+        </ReportActionBar>
       </div>
 
       {reportLoaded ? (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-start gap-3 print-hide">
-            <label className="flex flex-col gap-2 text-sm">
-              <span className="font-medium">従業員名（複数選択可）</span>
-              <select
-                multiple
-                size={Math.min(6, Math.max(4, employeeOptions.length))}
-                className="rounded border px-2 py-1 min-w-48"
-                value={employeeFilter}
-                onChange={handleEmployeeFilterChange}
-              >
-                {employeeOptions.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="flex flex-1 flex-wrap items-start gap-3">
+          <ReportActionBar className="print-hide">
+            <FilterChipGroup
+              label="従業員名（複数選択可）"
+              options={employeeOptions}
+              value={employeeFilter}
+              onChange={setEmployeeFilter}
+            />
+            <div className="flex flex-wrap items-start gap-3">
               <button
                 type="button"
                 onClick={handleEmployeeFilterReset}
-                className="rounded border px-3 py-1 text-sm"
+                className="rounded border border-brand-border px-3 py-1 text-sm text-brand-text"
                 disabled={!hasEmployeeFilter}
               >
                 全員を表示
@@ -763,13 +754,13 @@ export default function SiteReportPage() {
               {exportUrl ? (
                 <a
                   href={exportUrl}
-                  className="rounded border border-primary px-3 py-1 text-sm text-primary hover:bg-primary/10"
+                  className="rounded border border-brand-primary px-3 py-1 text-sm text-brand-primary hover:bg-brand-primary/10"
                 >
                   Excel出力
                 </a>
               ) : null}
             </div>
-          </div>
+          </ReportActionBar>
           <div className="screen-table-wrapper">
             <div className="overflow-x-auto rounded border">
               <table className="table-unified text-sm print-avoid-break" style={tableStyle}>
@@ -896,8 +887,8 @@ export default function SiteReportPage() {
           </div>
         </div>
       ) : (
-        <p className="text-sm text-gray-500">条件を選択し「集計する」を押すと結果が表示されます。</p>
+        <p className="text-sm text-brand-muted">条件を選択し「集計する」を押すと結果が表示されます。</p>
       )}
-    </div>
+    </ReportPageShell>
   );
 }
