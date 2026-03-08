@@ -55,7 +55,6 @@ export default async function ReportsPage({
       <div className="space-y-6">
         <header className="space-y-2">
           <h1 className="text-2xl font-semibold text-brand-text">個別集計</h1>
-          <p className="text-sm text-brand-muted">従業員ごとのセッション記録から稼働時間を算出します。</p>
         </header>
 
         <ReportFilterPanel>
