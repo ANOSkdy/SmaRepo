@@ -318,7 +318,7 @@ export default function AttendanceDetailSheet({
                       )}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between rounded bg-indigo-50 px-3 py-2 text-indigo-700">
+                  <div className="flex items-center justify-between rounded bg-primary/10 px-3 py-2 text-primary">
                     <span>稼働</span>
                     <span className="font-semibold">
                       {formatRoundedHoursFromMinutes(

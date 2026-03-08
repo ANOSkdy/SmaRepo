@@ -72,7 +72,7 @@ export default function MachineCheckboxGroup({ title = '機械（チェック可
                 <input
                   id={`machine-filter-${option.id}`}
                   type="checkbox"
-                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                   checked={selected.has(option.id)}
                   onChange={() => toggle(option.id)}
                 />

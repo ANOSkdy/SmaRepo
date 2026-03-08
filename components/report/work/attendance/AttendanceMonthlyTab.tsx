@@ -56,7 +56,7 @@ export default function AttendanceMonthlyTab() {
             type="month"
             value={month}
             onChange={(event) => setMonth(event.target.value)}
-            className="rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </label>
 
@@ -68,7 +68,7 @@ export default function AttendanceMonthlyTab() {
             placeholder="名前で検索"
             value={employeeQuery}
             onChange={(event) => setEmployeeQuery(event.target.value)}
-            className="rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </label>
 
@@ -101,7 +101,7 @@ export default function AttendanceMonthlyTab() {
             <div className="flex items-center justify-end">
               <a
                 href={exportUrl}
-                className="inline-flex items-center gap-2 rounded border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
+                className="inline-flex items-center gap-2 rounded border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20"
               >
                 Excel出力
               </a>

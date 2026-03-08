@@ -23,7 +23,7 @@ export default function ReportsTabs() {
               href={tab.href}
               className={
                 isActive
-                  ? 'border-b-2 border-indigo-500 pb-1 text-sm font-semibold text-indigo-600'
+                  ? 'border-b-2 border-primary pb-1 text-sm font-semibold text-primary'
                   : 'pb-1 text-sm text-gray-500 transition hover:text-gray-900'
               }
               prefetch

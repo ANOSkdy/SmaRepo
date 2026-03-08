@@ -724,7 +724,7 @@ export default function SiteReportPage() {
             type="button"
             onClick={loadReport}
             disabled={!isReady || loading}
-            className="rounded bg-indigo-600 px-4 py-2 text-white transition disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded bg-primary px-4 py-2 text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? '集計中…' : '集計する'}
           </button>
@@ -763,7 +763,7 @@ export default function SiteReportPage() {
               {exportUrl ? (
                 <a
                   href={exportUrl}
-                  className="rounded border px-3 py-1 text-sm text-indigo-600 hover:bg-indigo-50"
+                  className="rounded border border-primary px-3 py-1 text-sm text-primary hover:bg-primary/10"
                 >
                   Excel出力
                 </a>
