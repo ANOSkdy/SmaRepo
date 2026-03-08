@@ -246,7 +246,16 @@ export async function GET(req: NextRequest) {
         LEFT JOIN users u ON u.id = l.user_id
         LEFT JOIN machines m ON m.id = l.machine_id
         WHERE l.work_date = $1::date
-        ORDER BY l.user_id ASC, l.stamped_at ASC
+        ORDER BY
+          CASE
+            WHEN NULLIF(TRIM(COALESCE(u.username, '')), '') ~ '^[0-9]+$'
+              THEN NULLIF(TRIM(COALESCE(u.username, '')), '')::bigint
+            ELSE NULL
+          END ASC NULLS LAST,
+          COALESCE(NULLIF(TRIM(u.username), ''), '') ASC,
+          COALESCE(NULLIF(TRIM(u.name), ''), '') ASC,
+          l.stamped_at ASC,
+          l.id ASC
       `,
       [date]
     );
