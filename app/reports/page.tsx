@@ -52,7 +52,7 @@ export default async function ReportsPage({
       <div className="space-y-6">
         <header className="space-y-2">
           <h1 className="text-2xl font-semibold text-gray-900">個別集計</h1>
-          <p className="text-sm text-gray-600">従業員ごとの IN/OUT ペアリングから稼働時間を算出します。</p>
+          <p className="text-sm text-gray-600">従業員ごとのセッション記録から稼働時間を算出します。</p>
         </header>
 
         <form className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6" method="get">
