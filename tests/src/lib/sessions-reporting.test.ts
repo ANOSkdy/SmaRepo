@@ -27,6 +27,7 @@ test('mapSessionRow trusts duration_min and trims optional snapshots', () => {
     user_id: 'user-1',
     machine_id: 'machine-1',
     user_name: ' 山田 ',
+    user_code: '101',
     machine_name: ' M-01 ',
   });
 
@@ -36,6 +37,7 @@ test('mapSessionRow trusts duration_min and trims optional snapshots', () => {
   assert.equal(row.workDescription, '作業A');
   assert.equal(row.userName, '山田');
   assert.equal(row.machineName, 'M-01');
+  assert.equal(row.userId, 101);
 });
 
 test('mapSessionRow falls back to computed duration and keeps open sessions visible', () => {
@@ -53,6 +55,7 @@ test('mapSessionRow falls back to computed duration and keeps open sessions visi
     user_id: 'user-1',
     machine_id: null,
     user_name: null,
+    user_code: null,
     machine_name: null,
   });
 

@@ -1,4 +1,4 @@
-import type { UserFields } from '@/types';
+import { query } from '@/lib/db';
 import { logger } from '@/lib/logger';
 
 export type BreakPolicyIdentity = {
@@ -50,26 +50,6 @@ function asNumber(value: unknown): number | null {
   return null;
 }
 
-function asBoolean(value: unknown): boolean {
-  if (typeof value === 'boolean') {
-    return value;
-  }
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase();
-    if (normalized === 'true' || normalized === '1') return true;
-    if (normalized === 'false' || normalized === '0') return false;
-  }
-  if (typeof value === 'number') {
-    if (value === 1) return true;
-    if (value === 0) return false;
-  }
-  return false;
-}
-
-function escapeFormulaValue(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/'/g, "\\'");
-}
-
 function normalizeName(value: string): string {
   return value.trim().toLocaleLowerCase('ja');
 }
@@ -97,57 +77,74 @@ function toPolicy(record: UserPolicyRecord | null, source: Exclude<BreakPolicySo
   };
 }
 
-async function buildDeps(): Promise<ResolverDeps> {
-  const { usersTable, withRetry } = await import('@/lib/airtable');
+type UserPolicyRow = {
+  id: string;
+  name: string | null;
+  user_id_number: number | null;
+  exclude_break_deduction: boolean;
+};
 
-  const toPolicyRecord = (record: { id: string; fields: Partial<UserFields> | undefined }): UserPolicyRecord => {
-    const fields = record.fields ?? {};
-    return {
-      id: record.id,
-      name: asString(fields.name) ?? asString(fields.username),
-      userId: asNumber(fields.userId),
-      excludeBreakDeduction: asBoolean((fields as Record<string, unknown>).excludeBreakDeduction),
-    };
+function toPolicyRecord(row: UserPolicyRow): UserPolicyRecord {
+  return {
+    id: row.id,
+    name: asString(row.name),
+    userId: asNumber(row.user_id_number),
+    excludeBreakDeduction: Boolean(row.exclude_break_deduction),
   };
+}
 
+async function queryPolicyRows(whereClause: string, values: Array<string | number>): Promise<UserPolicyRecord[]> {
+  const result = await query<UserPolicyRow>(
+    `
+      SELECT
+        u.id::text AS id,
+        COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(u.username), '')) AS name,
+        CASE
+          WHEN NULLIF(TRIM(COALESCE(u.username, '')), '') ~ '^[0-9]+$'
+            THEN NULLIF(TRIM(COALESCE(u.username, '')), '')::int
+          ELSE NULL
+        END AS user_id_number,
+        CASE
+          WHEN LOWER(TRIM(COALESCE(to_jsonb(u)->>'excludeBreakDeduction', to_jsonb(u)->>'exclude_break_deduction', 'false'))) IN ('true', '1')
+            THEN true
+          ELSE false
+        END AS exclude_break_deduction
+      FROM users u
+      ${whereClause}
+    `,
+    values,
+  );
+  return result.rows.map(toPolicyRecord);
+}
+
+async function buildDeps(): Promise<ResolverDeps> {
   return {
     findByRecordId: async (recordId) => {
-      const records = await withRetry(() =>
-        usersTable
-          .select({
-            filterByFormula: `RECORD_ID()='${escapeFormulaValue(recordId)}'`,
-            fields: ['name', 'username', 'userId', 'excludeBreakDeduction'],
-            maxRecords: 1,
-          })
-          .all(),
-      );
-      const first = records[0];
-      return first ? toPolicyRecord({ id: first.id, fields: first.fields as Partial<UserFields> }) : null;
+      const rows = await queryPolicyRows('WHERE u.id::text = $1 LIMIT 1', [recordId]);
+      return rows[0] ?? null;
     },
     findByUserId: async (userId) => {
-      const records = await withRetry(() =>
-        usersTable
-          .select({
-            filterByFormula: `{userId} = ${Math.round(userId)}`,
-            fields: ['name', 'username', 'userId', 'excludeBreakDeduction'],
-            maxRecords: 1,
-          })
-          .all(),
+      const rows = await queryPolicyRows(
+        `
+          WHERE CASE
+            WHEN NULLIF(TRIM(COALESCE(u.username, '')), '') ~ '^[0-9]+$'
+              THEN NULLIF(TRIM(COALESCE(u.username, '')), '')::int
+            ELSE NULL
+          END = $1
+          LIMIT 1
+        `,
+        [Math.round(userId)],
       );
-      const first = records[0];
-      return first ? toPolicyRecord({ id: first.id, fields: first.fields as Partial<UserFields> }) : null;
+      return rows[0] ?? null;
     },
     findByUserName: async (userName) => {
-      const formula = `LOWER({name}) = "${escapeFormulaValue(userName.toLocaleLowerCase('ja'))}"`;
-      const records = await withRetry(() =>
-        usersTable
-          .select({
-            filterByFormula: formula,
-            fields: ['name', 'username', 'userId', 'excludeBreakDeduction'],
-          })
-          .all(),
+      const rows = await queryPolicyRows(
+        `
+          WHERE LOWER(TRIM(COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(u.username), '')))) = LOWER(TRIM($1))
+        `,
+        [userName],
       );
-      return records.map((record) => toPolicyRecord({ id: record.id, fields: record.fields as Partial<UserFields> }));
+      return rows;
     },
     isPolicyEnabled: () => process.env.ENABLE_BREAK_POLICY !== 'false',
   };

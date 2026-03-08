@@ -12,10 +12,9 @@ export async function resolveSiteName(siteId?: string, siteName?: string): Promi
 
   const result = await query<SiteNameRow>(
     `
-      SELECT COALESCE(to_jsonb(s)->>'name', to_jsonb(s)->>'siteName') AS name
+      SELECT NULLIF(TRIM(s.name), '') AS name
       FROM sites s
-      WHERE COALESCE(to_jsonb(s)->>'siteId', to_jsonb(s)->>'id', '') = $1
-      ORDER BY COALESCE(to_jsonb(s)->>'id', '') ASC
+      WHERE s.id::text = $1
       LIMIT 1
     `,
     [siteId],

@@ -1,14 +1,25 @@
 import { logger } from '@/lib/logger';
 
+function isNonRetryableError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  if (error.name === 'AirtableEnvError') {
+    return true;
+  }
+  const message = error.message.toLowerCase();
+  return message.includes('airtable') && (message.includes('env') || message.includes('config') || message.includes('missing'));
+}
+
 export async function withRetry<T>(
   fn: () => Promise<T>,
   retries = 3,
-  delay = 500
+  delay = 500,
 ): Promise<T> {
   try {
     return await fn();
   } catch (error) {
-    if (retries <= 0) {
+    if (isNonRetryableError(error) || retries <= 0) {
       throw error;
     }
     logger.warn('withRetry retrying after error', {
