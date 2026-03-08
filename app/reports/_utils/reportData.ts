@@ -60,6 +60,21 @@ function toNumberValue(value: string | string[] | undefined): number | undefined
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function toValidatedYear(value: number | undefined): number | undefined {
+  if (!value) return undefined;
+  return value >= 2000 && value <= 2100 ? value : undefined;
+}
+
+function toValidatedMonth(value: number | undefined): number | undefined {
+  if (!value) return undefined;
+  return value >= 1 && value <= 12 ? value : undefined;
+}
+
+function toValidatedDay(value: number | undefined): number | undefined {
+  if (!value) return undefined;
+  return value >= 1 && value <= 31 ? value : undefined;
+}
+
 function toAutoFilter(value: string): AutoFilter | undefined {
   if (value === "only" || value === "exclude") {
     return value;
@@ -69,12 +84,15 @@ function toAutoFilter(value: string): AutoFilter | undefined {
 
 export function parseFilters(searchParams?: SearchParams): Filters {
   const params = searchParams ?? {};
+  const rawYear = toNumberValue(params.year);
+  const rawMonth = toNumberValue(params.month);
+  const rawDay = toNumberValue(params.day);
   return {
     user: toSingleValue(params.user).trim(),
     site: toSingleValue(params.site).trim(),
-    year: toNumberValue(params.year),
-    month: toNumberValue(params.month),
-    day: toNumberValue(params.day),
+    year: toValidatedYear(rawYear),
+    month: toValidatedMonth(rawMonth),
+    day: toValidatedDay(rawDay),
     auto: toAutoFilter(toSingleValue(params.auto).trim()),
   };
 }
