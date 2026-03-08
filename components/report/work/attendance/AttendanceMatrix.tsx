@@ -12,10 +12,18 @@ import type { AttendanceDay, AttendanceRow } from './useMonthlyAttendance';
 export type AttendanceMatrixProps = {
   days: AttendanceDay[];
   rows: AttendanceRow[];
-  onSelectCell: (payload: { userId: number | null; userName: string; date: string }) => void;
+  onSelectCell: (payload: {
+    userId: number | null;
+    userName: string;
+    date: string;
+  }) => void;
 };
 
-export default function AttendanceMatrix({ days, rows, onSelectCell }: AttendanceMatrixProps) {
+export default function AttendanceMatrix({
+  days,
+  rows,
+  onSelectCell,
+}: AttendanceMatrixProps) {
   return (
     <div className="overflow-auto rounded-lg border border-gray-200 bg-white shadow-sm">
       <table className="min-w-max border-collapse text-xs text-gray-700">
@@ -36,7 +44,9 @@ export default function AttendanceMatrix({ days, rows, onSelectCell }: Attendanc
               >
                 <div className="flex flex-col items-center">
                   <span className="text-sm font-semibold">{day.day}</span>
-                  <span className="text-[10px] text-gray-400">{day.weekdayJa}</span>
+                  <span className="text-[10px] text-gray-400">
+                    {day.weekdayJa}
+                  </span>
                 </div>
               </th>
             ))}
@@ -56,10 +66,6 @@ export default function AttendanceMatrix({ days, rows, onSelectCell }: Attendanc
         </thead>
         <tbody>
           {rows.flatMap((row) => {
-            const baseTotal = days.reduce((total, day) => {
-              const hours = row.daily[day.date]?.hours ?? 0;
-              return total + Math.min(hours, BASE_HOURS_PER_DAY);
-            }, 0);
             const overtimeTotal = days.reduce((total, day) => {
               const hours = row.daily[day.date]?.hours ?? 0;
               return total + Math.max(hours - BASE_HOURS_PER_DAY, 0);
@@ -76,7 +82,6 @@ export default function AttendanceMatrix({ days, rows, onSelectCell }: Attendanc
                 {days.map((day) => {
                   const cell = row.daily[day.date];
                   const hours = cell?.hours ?? 0;
-                  const baseHours = Math.min(hours, BASE_HOURS_PER_DAY);
                   const hasAnomaly = cell?.hasAnomaly ?? false;
                   const isClickable = row.userId != null;
                   return (
@@ -92,13 +97,19 @@ export default function AttendanceMatrix({ days, rows, onSelectCell }: Attendanc
                         disabled={!isClickable}
                         onClick={() => {
                           if (!isClickable) return;
-                          onSelectCell({ userId: row.userId, userName: row.name, date: day.date });
+                          onSelectCell({
+                            userId: row.userId,
+                            userName: row.name,
+                            date: day.date,
+                          });
                         }}
-                        aria-label={`${row.name} ${day.date} ${formatAttendanceHours(baseHours, true)}`}
+                        aria-label={`${row.name} ${day.date} ${formatAttendanceHours(hours, true)}`}
                       >
                         <span className="inline-flex items-center gap-1 tabular-nums">
-                          <span>{formatAttendanceHours(baseHours, true)}</span>
-                          {hasAnomaly ? <span className="text-amber-600">⚠︎</span> : null}
+                          <span>{formatAttendanceHours(hours, true)}</span>
+                          {hasAnomaly ? (
+                            <span className="text-amber-600">⚠︎</span>
+                          ) : null}
                         </span>
                       </button>
                     </td>
@@ -108,7 +119,7 @@ export default function AttendanceMatrix({ days, rows, onSelectCell }: Attendanc
                   let value = '–';
                   switch (column.key) {
                     case 'hours':
-                      value = formatAttendanceHours(baseTotal, false);
+                      value = formatAttendanceHours(row.totals.hours, false);
                       break;
                     case 'workDays':
                       value = `${row.totals.workDays}`;
@@ -138,7 +149,10 @@ export default function AttendanceMatrix({ days, rows, onSelectCell }: Attendanc
               </tr>
             );
             const overtimeRow = (
-              <tr key={`${rowKey}-overtime`} className="border-b border-gray-100">
+              <tr
+                key={`${rowKey}-overtime`}
+                className="border-b border-gray-100"
+              >
                 <th
                   className="sticky left-0 z-10 border-r border-gray-200 bg-white px-3 py-2 text-left text-xs font-medium text-gray-500"
                   style={{ minWidth: 160 }}
@@ -165,7 +179,11 @@ export default function AttendanceMatrix({ days, rows, onSelectCell }: Attendanc
                         disabled={!isClickable}
                         onClick={() => {
                           if (!isClickable) return;
-                          onSelectCell({ userId: row.userId, userName: row.name, date: day.date });
+                          onSelectCell({
+                            userId: row.userId,
+                            userName: row.name,
+                            date: day.date,
+                          });
                         }}
                         aria-label={`${row.name} ${day.date} 超過 ${formatAttendanceHours(overtimeHours, true)}`}
                       >
