@@ -71,12 +71,11 @@ export async function GET(req: NextRequest) {
       `
         SELECT work_date::text as work_date, decided_site_name_snapshot
         FROM logs
-        WHERE user_id = $1::uuid
-          AND work_date >= $2::date
-          AND work_date <  $3::date
+        WHERE work_date >= $1::date
+          AND work_date <  $2::date
         ORDER BY work_date ASC, stamped_at ASC
       `,
-      [userId, range.start, range.endExclusive]
+      [range.start, range.endExclusive]
     );
 
     // 日ごとに「現場名リスト」を作る（UI側は sites が空なら "現場情報なし" になる想定）
