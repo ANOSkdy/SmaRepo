@@ -35,9 +35,9 @@ function normalizeMachineIds(value: string | null) {
     .filter((item) => item.length > 0);
 }
 
-function normalizeWorkType(value: string | null): 'all' | 'jyoyo' | 'kado' {
+function normalizeWorkType(value: string | null): 'all' | 'regular' | 'operating' | 'other' {
   const normalized = (value ?? '').trim();
-  if (normalized === 'jyoyo' || normalized === 'kado') {
+  if (normalized === 'regular' || normalized === 'operating' || normalized === 'other') {
     return normalized;
   }
   return 'all';

@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     .filter(Boolean);
   const workTypeParam = (searchParams.get('workType') ?? '').trim();
   const workType =
-    workTypeParam === 'jyoyo' || workTypeParam === 'kado'
+    workTypeParam === 'regular' || workTypeParam === 'operating' || workTypeParam === 'other'
       ? workTypeParam
       : 'all';
 

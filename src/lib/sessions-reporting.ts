@@ -18,6 +18,7 @@ export type NormalizedSessionRow = {
   siteRecordId: string | null;
   clientName: string | null;
   workDescription: string | null;
+  workTypeCategory: string | null;
   userId: number | null;
   userRecordId: string | null;
   userName: string | null;
@@ -59,6 +60,7 @@ type SessionDbRow = {
   decided_site_id: string | null;
   decided_site_name_snapshot: string | null;
   work_description_snapshot: string | null;
+  work_type_category: string | null;
   user_id: string | null;
   machine_id: string | null;
   machine_code: string | null;
@@ -130,6 +132,7 @@ export function mapSessionRow(row: SessionDbRow): NormalizedSessionRow {
     siteRecordId: asString(row.decided_site_id),
     clientName: null,
     workDescription: asString(row.work_description_snapshot),
+    workTypeCategory: asString(row.work_type_category),
     userId: asNumber(row.user_code),
     userRecordId: asString(row.user_id),
     userName: asString(row.user_name),
@@ -220,6 +223,7 @@ export async function fetchNormalizedSessions(params: FetchNormalizedSessionsPar
         s.decided_site_id::text AS decided_site_id,
         s.decided_site_name_snapshot,
         s.work_description_snapshot,
+        COALESCE(NULLIF(TRIM(wt_in.category), ''), NULLIF(TRIM(wt_out.category), '')) AS work_type_category,
         s.user_id::text AS user_id,
         s.machine_id::text AS machine_id,
         COALESCE(
@@ -235,6 +239,10 @@ export async function fetchNormalizedSessions(params: FetchNormalizedSessionsPar
       FROM sessions s
       LEFT JOIN users u ON u.id = s.user_id
       LEFT JOIN machines m ON m.id = s.machine_id
+      LEFT JOIN logs l_in ON l_in.id = s.in_log_id
+      LEFT JOIN logs l_out ON l_out.id = s.out_log_id
+      LEFT JOIN work_types wt_in ON wt_in.id = l_in.work_type_id
+      LEFT JOIN work_types wt_out ON wt_out.id = l_out.work_type_id
       ${whereClause}
       ORDER BY s.work_date ASC, s.start_at ASC, s.id ASC
     `,
