@@ -198,14 +198,45 @@ export default function SiteReportPage() {
 
   const machineOptions = useMemo(() => {
     const map = new Map<string, string>();
+
+    const normalizeMachineCode = (value: unknown) => {
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        return trimmed.length > 0 ? trimmed : '';
+      }
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return String(value);
+      }
+      return '';
+    };
+
+    const resolveMachineCode = (machine: MachineMaster) => {
+      const fields = machine.fields as Record<string, unknown> | undefined;
+      const candidates = [
+        fields?.machineid,
+        fields?.machineId,
+        fields?.machine_id,
+        fields?.machinecode,
+        fields?.machine_code,
+        fields?.code,
+      ];
+      for (const candidate of candidates) {
+        const code = normalizeMachineCode(candidate);
+        if (code) {
+          return code;
+        }
+      }
+      return '';
+    };
+
     derivedMachineLabels.forEach((label, id) => {
       map.set(id, label);
     });
+
     machines.forEach((machine) => {
-      const machineIdRaw =
-        typeof machine.fields?.machineid === 'string' ? machine.fields.machineid.trim() : '';
+      const machineCode = resolveMachineCode(machine);
       const fallbackId = typeof machine.id === 'string' ? machine.id.trim() : String(machine.id);
-      const id = machineIdRaw || fallbackId;
+      const id = machineCode || fallbackId;
       if (!id) {
         return;
       }
@@ -215,6 +246,7 @@ export default function SiteReportPage() {
       const label = nameRaw || existing || id;
       map.set(id, label);
     });
+
     return Array.from(map.entries())
       .filter(([id]) => id.trim().length > 0)
       .sort((a, b) =>
@@ -225,10 +257,7 @@ export default function SiteReportPage() {
       )
       .map(([id, name]) => ({
         id,
-        name:
-          name.trim().length > 0
-            ? `${name} (${id})`
-            : id,
+        name: name.trim().length > 0 ? `${name} (${id})` : id,
       }));
   }, [derivedMachineLabels, machines]);
 
