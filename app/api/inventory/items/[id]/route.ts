@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { inventoryQuery } from '@/lib/inventory/db';
+import { inventoryItemUpdateSchema, normalizeNullableText } from '@/lib/inventory/schemas';
 
 export const runtime = 'nodejs';
 
@@ -75,5 +76,80 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     return NextResponse.json(item);
   } catch {
     return NextResponse.json({ error: 'DB_QUERY_FAILED' }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  }
+
+  const routeParams = await context.params;
+  const parsedParams = paramsSchema.safeParse(routeParams);
+  if (!parsedParams.success) {
+    return NextResponse.json({ error: 'INVALID_ID' }, { status: 400 });
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'INVALID_JSON' }, { status: 400 });
+  }
+
+  const parsedBody = inventoryItemUpdateSchema.safeParse(body);
+  if (!parsedBody.success) {
+    return NextResponse.json({ error: 'INVALID_BODY' }, { status: 400 });
+  }
+
+  const payload = parsedBody.data;
+  const updates: string[] = [];
+  const params: unknown[] = [];
+
+  const setField = (sql: string, value: unknown) => {
+    params.push(value);
+    updates.push(`${sql} = $${params.length}`);
+  };
+
+  if (payload.sku !== undefined) setField('sku', payload.sku);
+  if (payload.name !== undefined) setField('name', payload.name);
+  if (payload.description !== undefined || payload.note !== undefined) {
+    setField('description', normalizeNullableText(payload.note ?? payload.description));
+  }
+  if (payload.categoryId !== undefined) setField('category_id', payload.categoryId);
+  if (payload.locationId !== undefined) setField('location_id', payload.locationId);
+  if (payload.quantity !== undefined) setField('quantity', payload.quantity);
+  if (payload.unit !== undefined) setField('unit', normalizeNullableText(payload.unit));
+  if (payload.imageUrl !== undefined) setField('image_url', normalizeNullableText(payload.imageUrl));
+  if (payload.imagePath !== undefined) setField('image_path', normalizeNullableText(payload.imagePath));
+  if (payload.status !== undefined) setField('is_active', payload.status !== 'inactive');
+
+  if (updates.length === 0) {
+    return NextResponse.json({ error: 'NO_FIELDS_TO_UPDATE' }, { status: 400 });
+  }
+
+  params.push(parsedParams.data.id);
+
+  try {
+    const result = await inventoryQuery<{ id: string }>(
+      `
+        UPDATE inventory.items
+        SET
+          ${updates.join(', ')},
+          updated_at = NOW()
+        WHERE id = $${params.length}::uuid
+        RETURNING id::text AS id
+      `,
+      params,
+    );
+
+    if (!result.rows[0]) {
+      return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
+    }
+
+    return NextResponse.json({ id: result.rows[0].id });
+  } catch {
+    return NextResponse.json({ error: 'DB_WRITE_FAILED' }, { status: 500 });
   }
 }

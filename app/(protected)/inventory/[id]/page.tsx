@@ -118,9 +118,10 @@ export default function InventoryDetailPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-brand-text">在庫詳細</h1>
-        <Link href="/inventory" className="text-sm text-brand-primary underline">
-          在庫一覧へ
-        </Link>
+        <div className="flex gap-3 text-sm">
+          <Link href={`/inventory/${item.id}/edit`} className="text-brand-primary underline">編集</Link>
+          <Link href="/inventory" className="text-brand-primary underline">在庫一覧へ</Link>
+        </div>
       </div>
 
       <section className="grid gap-6 rounded-lg border border-brand-border bg-brand-surface p-4 md:grid-cols-[280px_1fr]">

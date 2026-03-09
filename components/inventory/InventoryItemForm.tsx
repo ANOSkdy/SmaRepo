@@ -1,0 +1,141 @@
+'use client';
+
+import { FormEvent, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import type { InventoryCategory, InventoryLocation } from '@/types/inventory';
+
+type InventoryFormValue = {
+  id?: string;
+  sku: string;
+  name: string;
+  note: string;
+  categoryId: string;
+  locationId: string;
+  quantity: number;
+  unit: string;
+  status: 'active' | 'inactive';
+  imageUrl: string | null;
+  imagePath: string | null;
+};
+
+export function InventoryItemForm({
+  mode,
+  initialValue,
+  categories,
+  locations,
+}: {
+  mode: 'create' | 'edit';
+  initialValue: InventoryFormValue;
+  categories: InventoryCategory[];
+  locations: InventoryLocation[];
+}) {
+  const router = useRouter();
+  const [value, setValue] = useState(initialValue);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => setValue(initialValue), [initialValue]);
+
+  const onUpload = async (file: File | null) => {
+    if (!file) return;
+
+    setUploading(true);
+    setError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/inventory/upload', {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin',
+      });
+
+      if (!response.ok) {
+        throw new Error('UPLOAD_FAILED');
+      }
+
+      const data = (await response.json()) as { url: string; path: string };
+      setValue((prev) => ({ ...prev, imageUrl: data.url, imagePath: data.path }));
+    } catch {
+      setError('画像アップロードに失敗しました。jpg/png/webp 5MB以下を確認してください。');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+
+    try {
+      const payload = {
+        sku: value.sku,
+        name: value.name,
+        categoryId: value.categoryId,
+        locationId: value.locationId,
+        quantity: Number(value.quantity),
+        unit: value.unit,
+        status: value.status,
+        note: value.note,
+        imageUrl: value.imageUrl,
+        imagePath: value.imagePath,
+      };
+
+      const response = await fetch(mode === 'create' ? '/api/inventory/items' : `/api/inventory/items/${value.id}`, {
+        method: mode === 'create' ? 'POST' : 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+        credentials: 'same-origin',
+      });
+
+      if (!response.ok) {
+        throw new Error('SAVE_FAILED');
+      }
+
+      const data = (await response.json()) as { id: string };
+      router.push(mode === 'create' ? `/inventory/${data.id}` : `/inventory/${value.id}`);
+      router.refresh();
+    } catch {
+      setError('保存に失敗しました。入力内容をご確認ください。');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-4 rounded-lg border border-brand-border bg-brand-surface p-4">
+      <div className="grid gap-4 md:grid-cols-2">
+        <input className="rounded border px-3 py-2" placeholder="品目コード" value={value.sku} onChange={(e) => setValue({ ...value, sku: e.target.value })} required />
+        <input className="rounded border px-3 py-2" placeholder="品目名" value={value.name} onChange={(e) => setValue({ ...value, name: e.target.value })} required />
+        <select className="rounded border px-3 py-2" value={value.categoryId} onChange={(e) => setValue({ ...value, categoryId: e.target.value })} required>
+          <option value="">カテゴリを選択</option>
+          {categories.filter((x) => x.isActive).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+        </select>
+        <select className="rounded border px-3 py-2" value={value.locationId} onChange={(e) => setValue({ ...value, locationId: e.target.value })} required>
+          <option value="">保管場所を選択</option>
+          {locations.filter((x) => x.isActive).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+        </select>
+        <input className="rounded border px-3 py-2" type="number" min={0} value={value.quantity} onChange={(e) => setValue({ ...value, quantity: Number(e.target.value) })} required />
+        <input className="rounded border px-3 py-2" placeholder="単位" value={value.unit} onChange={(e) => setValue({ ...value, unit: e.target.value })} />
+        <select className="rounded border px-3 py-2" value={value.status} onChange={(e) => setValue({ ...value, status: e.target.value as 'active' | 'inactive' })}>
+          <option value="active">有効</option>
+          <option value="inactive">無効</option>
+        </select>
+        <input className="rounded border px-3 py-2" type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => onUpload(e.target.files?.[0] ?? null)} />
+      </div>
+
+      <textarea className="w-full rounded border px-3 py-2" rows={4} placeholder="メモ" value={value.note} onChange={(e) => setValue({ ...value, note: e.target.value })} />
+
+      {value.imageUrl ? <img src={value.imageUrl} alt="uploaded" className="h-28 w-28 rounded object-cover" /> : null}
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
+      <button type="submit" disabled={saving || uploading} className="rounded bg-brand-primary px-4 py-2 text-sm text-brand-primaryText">
+        {uploading ? '画像アップロード中...' : saving ? '保存中...' : mode === 'create' ? '登録する' : '更新する'}
+      </button>
+    </form>
+  );
+}
