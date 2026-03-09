@@ -1,16 +1,10 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { inventoryQuery } from '@/lib/inventory/db';
+import { inventoryItemCreateSchema, normalizeNullableText } from '@/lib/inventory/schemas';
 import type { InventoryItemListEntry } from '@/types/inventory';
 
 export const runtime = 'nodejs';
-
-const inventoryItemsQuerySchema = z.object({
-  q: z.string().trim().max(100).optional(),
-  categoryId: z.string().uuid().optional(),
-  locationId: z.string().uuid().optional(),
-});
 
 type InventoryItemListRow = {
   id: string;
@@ -37,17 +31,9 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const parsed = inventoryItemsQuerySchema.safeParse({
-    q: url.searchParams.get('q') ?? undefined,
-    categoryId: url.searchParams.get('categoryId') ?? undefined,
-    locationId: url.searchParams.get('locationId') ?? undefined,
-  });
-
-  if (!parsed.success) {
-    return NextResponse.json({ error: 'INVALID_QUERY' }, { status: 400 });
-  }
-
-  const { q, categoryId, locationId } = parsed.data;
+  const q = (url.searchParams.get('q') ?? '').trim();
+  const categoryId = url.searchParams.get('categoryId') ?? '';
+  const locationId = url.searchParams.get('locationId') ?? '';
 
   const params: unknown[] = [];
   let whereClause = 'WHERE i.is_active = TRUE';
@@ -98,5 +84,64 @@ export async function GET(request: Request) {
     return NextResponse.json(result.rows as InventoryItemListEntry[]);
   } catch {
     return NextResponse.json({ error: 'DB_QUERY_FAILED' }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'INVALID_JSON' }, { status: 400 });
+  }
+
+  const parsed = inventoryItemCreateSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'INVALID_BODY' }, { status: 400 });
+  }
+
+  const payload = parsed.data;
+
+  try {
+    const result = await inventoryQuery<{ id: string }>(
+      `
+        INSERT INTO inventory.items (
+          sku,
+          name,
+          description,
+          category_id,
+          location_id,
+          quantity,
+          unit,
+          image_url,
+          image_path,
+          is_active
+        ) VALUES (
+          $1, $2, $3, $4::uuid, $5::uuid, $6, $7, $8, $9, $10
+        )
+        RETURNING id::text AS id
+      `,
+      [
+        payload.sku,
+        payload.name,
+        normalizeNullableText(payload.note ?? payload.description),
+        payload.categoryId,
+        payload.locationId,
+        payload.quantity,
+        normalizeNullableText(payload.unit),
+        normalizeNullableText(payload.imageUrl),
+        normalizeNullableText(payload.imagePath),
+        payload.status !== 'inactive',
+      ],
+    );
+
+    return NextResponse.json({ id: result.rows[0]?.id ?? null }, { status: 201 });
+  } catch {
+    return NextResponse.json({ error: 'DB_WRITE_FAILED' }, { status: 500 });
   }
 }
