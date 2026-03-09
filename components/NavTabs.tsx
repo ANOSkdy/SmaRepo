@@ -9,6 +9,7 @@ const NAV_TABS = [
   // ダッシュボードが月次カレンダーを代替
   { href: '/dashboard', label: 'カレンダー' },
   { href: '/reports', label: '稼働集計' },
+  { href: '/inventory', label: '在庫一覧' },
   { href: `/nfc?machineId=${DEFAULT_MACHINE_ID}`, label: '打刻ページ' },
 ] as const;
 

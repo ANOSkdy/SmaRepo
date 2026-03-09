@@ -10,7 +10,8 @@ export function shouldHideSubHeader(pathname: string | null | undefined): boolea
   return (
     pathname.startsWith('/dashboard') ||
     pathname.startsWith('/nfc') ||
-    pathname.startsWith('/reports')
+    pathname.startsWith('/reports') ||
+    pathname.startsWith('/inventory')
   );
 }
 

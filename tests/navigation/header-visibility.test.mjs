@@ -44,11 +44,13 @@ test('isActivePath matches base route segments', () => {
   assert.equal(isActivePath(null, '/reports'), false);
 });
 
-test('shouldHideSubHeader hides for dashboard, reports, and nfc routes', () => {
+test('shouldHideSubHeader hides for dashboard, reports, inventory, and nfc routes', () => {
   assert.equal(shouldHideSubHeader('/dashboard'), true);
   assert.equal(shouldHideSubHeader('/dashboard/reports'), true);
   assert.equal(shouldHideSubHeader('/reports'), true);
   assert.equal(shouldHideSubHeader('/reports/sites'), true);
+  assert.equal(shouldHideSubHeader('/inventory'), true);
+  assert.equal(shouldHideSubHeader('/inventory/123'), true);
   assert.equal(shouldHideSubHeader('/nfc'), true);
   assert.equal(shouldHideSubHeader('/nfc/history'), true);
 });
