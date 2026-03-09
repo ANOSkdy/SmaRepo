@@ -155,12 +155,18 @@ export default function InventoryPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <header className="space-y-3">
         <h1 className="text-2xl font-semibold text-brand-text">在庫一覧</h1>
-        <div className="flex flex-wrap gap-3 text-sm">
-          <Link href="/inventory/new" className="text-brand-primary underline">新規登録</Link>
-          <Link href="/inventory/categories" className="text-brand-primary underline">カテゴリ管理</Link>
-          <Link href="/inventory/locations" className="text-brand-primary underline">保管場所管理</Link>
+        <div className="flex flex-wrap gap-2 text-sm">
+          <Link href="/inventory/new" className="rounded border border-brand-border px-3 py-1.5 text-brand-text hover:bg-brand-surface-alt">
+            新規登録
+          </Link>
+          <Link href="/inventory/categories" className="rounded border border-brand-border px-3 py-1.5 text-brand-text hover:bg-brand-surface-alt">
+            カテゴリ管理
+          </Link>
+          <Link href="/inventory/locations" className="rounded border border-brand-border px-3 py-1.5 text-brand-text hover:bg-brand-surface-alt">
+            保管場所管理
+          </Link>
         </div>
       </header>
 
@@ -232,57 +238,79 @@ export default function InventoryPage() {
           条件に一致する在庫がありません。
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-brand-border bg-brand-surface">
-          <table className="min-w-full text-sm">
-            <thead className="bg-brand-surface-alt text-left text-brand-text">
-              <tr>
-                <th className="px-3 py-2 font-semibold">画像</th>
-                <th className="px-3 py-2 font-semibold">品目コード</th>
-                <th className="px-3 py-2 font-semibold">品目名</th>
-                <th className="px-3 py-2 font-semibold">カテゴリ</th>
-                <th className="px-3 py-2 font-semibold">保管場所</th>
-                <th className="px-3 py-2 font-semibold">数量</th>
-                <th className="px-3 py-2 font-semibold">単位</th>
-                <th className="px-3 py-2 font-semibold">更新日時</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => {
-                const imageUrl = toSafeImageUrl(item.imageUrl);
-                return (
-                  <tr key={item.id} className="border-t border-brand-border">
-                    <td className="px-3 py-2">
-                      {imageUrl ? (
-                        <img
-                          src={imageUrl}
-                          alt={item.name}
-                          loading="lazy"
-                          className="h-12 w-12 rounded object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className="flex h-12 w-12 items-center justify-center rounded bg-brand-surface-alt text-xs text-brand-muted">
-                          No Img
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-brand-muted">{item.sku}</td>
-                    <td className="px-3 py-2">
-                      <Link href={`/inventory/${item.id}`} className="text-brand-primary underline">
+        <>
+          <div className="space-y-3 md:hidden">
+            {items.map((item) => {
+              const imageUrl = toSafeImageUrl(item.imageUrl);
+              return (
+                <article key={item.id} className="rounded-lg border border-brand-border bg-brand-surface p-3">
+                  <div className="flex items-start gap-3">
+                    {imageUrl ? (
+                      <img src={imageUrl} alt={item.name} loading="lazy" className="h-14 w-14 shrink-0 rounded object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded bg-brand-surface-alt text-xs text-brand-muted">No Img</div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs text-brand-muted">{item.sku}</p>
+                      <Link href={`/inventory/${item.id}`} className="block truncate text-base font-medium text-brand-primary underline">
                         {item.name}
                       </Link>
-                    </td>
-                    <td className="px-3 py-2">{item.categoryName}</td>
-                    <td className="px-3 py-2">{item.locationName}</td>
-                    <td className="px-3 py-2">{item.quantity}</td>
-                    <td className="px-3 py-2">{item.unit ?? '-'}</td>
-                    <td className="px-3 py-2 text-brand-muted">{formatDateTime(item.updatedAt)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      <p className="truncate text-sm text-brand-text">{item.categoryName} / {item.locationName}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-sm">
+                    <p className="text-brand-text">数量: <span className="font-medium">{item.quantity}{item.unit ? ` ${item.unit}` : ''}</span></p>
+                    <p className="text-xs text-brand-muted">{formatDateTime(item.updatedAt)}</p>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-lg border border-brand-border bg-brand-surface md:block">
+            <table className="min-w-full text-sm">
+              <thead className="bg-brand-surface-alt text-left text-brand-text">
+                <tr>
+                  <th className="px-3 py-2 font-semibold">画像</th>
+                  <th className="px-3 py-2 font-semibold">品目コード</th>
+                  <th className="px-3 py-2 font-semibold">品目名</th>
+                  <th className="px-3 py-2 font-semibold">カテゴリ</th>
+                  <th className="px-3 py-2 font-semibold">保管場所</th>
+                  <th className="px-3 py-2 font-semibold">数量</th>
+                  <th className="px-3 py-2 font-semibold">単位</th>
+                  <th className="px-3 py-2 font-semibold">更新日時</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => {
+                  const imageUrl = toSafeImageUrl(item.imageUrl);
+                  return (
+                    <tr key={item.id} className="border-t border-brand-border">
+                      <td className="px-3 py-2">
+                        {imageUrl ? (
+                          <img src={imageUrl} alt={item.name} loading="lazy" className="h-12 w-12 rounded object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <div className="flex h-12 w-12 items-center justify-center rounded bg-brand-surface-alt text-xs text-brand-muted">No Img</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-brand-muted">{item.sku}</td>
+                      <td className="px-3 py-2">
+                        <Link href={`/inventory/${item.id}`} className="text-brand-primary underline">
+                          {item.name}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2">{item.categoryName}</td>
+                      <td className="px-3 py-2">{item.locationName}</td>
+                      <td className="px-3 py-2">{item.quantity}</td>
+                      <td className="px-3 py-2">{item.unit ?? '-'}</td>
+                      <td className="px-3 py-2 text-brand-muted">{formatDateTime(item.updatedAt)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

@@ -109,33 +109,81 @@ export function InventoryItemForm({
   return (
     <form onSubmit={onSubmit} className="space-y-4 rounded-lg border border-brand-border bg-brand-surface p-4">
       <div className="grid gap-4 md:grid-cols-2">
-        <input className="rounded border px-3 py-2" placeholder="品目コード" value={value.sku} onChange={(e) => setValue({ ...value, sku: e.target.value })} required />
-        <input className="rounded border px-3 py-2" placeholder="品目名" value={value.name} onChange={(e) => setValue({ ...value, name: e.target.value })} required />
-        <select className="rounded border px-3 py-2" value={value.categoryId} onChange={(e) => setValue({ ...value, categoryId: e.target.value })} required>
-          <option value="">カテゴリを選択</option>
-          {categories.filter((x) => x.isActive).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-        </select>
-        <select className="rounded border px-3 py-2" value={value.locationId} onChange={(e) => setValue({ ...value, locationId: e.target.value })} required>
-          <option value="">保管場所を選択</option>
-          {locations.filter((x) => x.isActive).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-        </select>
-        <input className="rounded border px-3 py-2" type="number" min={0} value={value.quantity} onChange={(e) => setValue({ ...value, quantity: Number(e.target.value) })} required />
-        <input className="rounded border px-3 py-2" placeholder="単位" value={value.unit} onChange={(e) => setValue({ ...value, unit: e.target.value })} />
-        <select className="rounded border px-3 py-2" value={value.status} onChange={(e) => setValue({ ...value, status: e.target.value as 'active' | 'inactive' })}>
-          <option value="active">有効</option>
-          <option value="inactive">無効</option>
-        </select>
-        <input className="rounded border px-3 py-2" type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => onUpload(e.target.files?.[0] ?? null)} />
+        <label className="flex flex-col gap-1 text-sm text-brand-text">
+          品目コード
+          <input className="rounded border border-brand-border px-3 py-2" value={value.sku} onChange={(e) => setValue({ ...value, sku: e.target.value })} required />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm text-brand-text">
+          品目名
+          <input className="rounded border border-brand-border px-3 py-2" value={value.name} onChange={(e) => setValue({ ...value, name: e.target.value })} required />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm text-brand-text">
+          カテゴリ
+          <select className="rounded border border-brand-border px-3 py-2" value={value.categoryId} onChange={(e) => setValue({ ...value, categoryId: e.target.value })} required>
+            <option value="">カテゴリを選択</option>
+            {categories
+              .filter((x) => x.isActive)
+              .map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
+                </option>
+              ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm text-brand-text">
+          保管場所
+          <select className="rounded border border-brand-border px-3 py-2" value={value.locationId} onChange={(e) => setValue({ ...value, locationId: e.target.value })} required>
+            <option value="">保管場所を選択</option>
+            {locations
+              .filter((x) => x.isActive)
+              .map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
+                </option>
+              ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm text-brand-text">
+          数量
+          <input className="rounded border border-brand-border px-3 py-2" type="number" min={0} value={value.quantity} onChange={(e) => setValue({ ...value, quantity: Number(e.target.value) })} required />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm text-brand-text">
+          単位
+          <input className="rounded border border-brand-border px-3 py-2" value={value.unit} onChange={(e) => setValue({ ...value, unit: e.target.value })} />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm text-brand-text">
+          ステータス
+          <select className="rounded border border-brand-border px-3 py-2" value={value.status} onChange={(e) => setValue({ ...value, status: e.target.value as 'active' | 'inactive' })}>
+            <option value="active">有効</option>
+            <option value="inactive">無効</option>
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm text-brand-text">
+          画像
+          <input className="rounded border border-brand-border px-3 py-2" type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => onUpload(e.target.files?.[0] ?? null)} />
+        </label>
       </div>
 
-      <textarea className="w-full rounded border px-3 py-2" rows={4} placeholder="メモ" value={value.note} onChange={(e) => setValue({ ...value, note: e.target.value })} />
+      <label className="flex flex-col gap-1 text-sm text-brand-text">
+        メモ
+        <textarea className="w-full rounded border border-brand-border px-3 py-2" rows={4} value={value.note} onChange={(e) => setValue({ ...value, note: e.target.value })} />
+      </label>
 
       {value.imageUrl ? <img src={value.imageUrl} alt="uploaded" className="h-28 w-28 rounded object-cover" /> : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
-      <button type="submit" disabled={saving || uploading} className="rounded bg-brand-primary px-4 py-2 text-sm text-brand-primaryText">
-        {uploading ? '画像アップロード中...' : saving ? '保存中...' : mode === 'create' ? '登録する' : '更新する'}
-      </button>
+      <div className="flex justify-end">
+        <button type="submit" disabled={saving || uploading} className="rounded bg-brand-primary px-4 py-2 text-sm text-brand-primaryText">
+          {uploading ? '画像アップロード中...' : saving ? '保存中...' : mode === 'create' ? '登録する' : '更新する'}
+        </button>
+      </div>
     </form>
   );
 }
