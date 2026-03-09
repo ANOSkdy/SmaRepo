@@ -28,9 +28,11 @@ function buildMonthRange(year: number, month: number) {
   return { start, endExclusive };
 }
 
-type LogRow = {
-  work_date: string; // YYYY-MM-DD
-  decided_site_name_snapshot: string | null;
+type SessionSummaryRow = {
+  workDate: string; // YYYY-MM-DD
+  siteName: string | null;
+  sessionCount: number;
+  totalMinutes: number | null;
 };
 
 export async function GET(req: NextRequest) {
@@ -67,29 +69,40 @@ export async function GET(req: NextRequest) {
   try {
     const range = buildMonthRange(parsed.year, parsed.month);
 
-    const res = await query<LogRow>(
+    const res = await query<SessionSummaryRow>(
       `
-        SELECT work_date::text as work_date, decided_site_name_snapshot
-        FROM logs
-        WHERE work_date >= $1::date
-          AND work_date <  $2::date
-        ORDER BY work_date ASC, stamped_at ASC
+        SELECT
+          s.work_date::text as "workDate",
+          s.decided_site_name_snapshot as "siteName",
+          COUNT(*)::int as "sessionCount",
+          COALESCE(SUM(GREATEST(COALESCE(s.duration_min, 0), 0)), 0)::int as "totalMinutes"
+        FROM sessions s
+        WHERE s.work_date >= $1::date
+          AND s.work_date <  $2::date
+        GROUP BY s.work_date, s.decided_site_name_snapshot
+        ORDER BY s.work_date ASC, s.decided_site_name_snapshot ASC NULLS LAST
       `,
       [range.start, range.endExclusive]
     );
 
-    // 日ごとに「現場名リスト」を作る（UI側は sites が空なら "現場情報なし" になる想定）
-    const byDate = new Map<string, Set<string>>();
+    const byDate = new Map<string, { sites: Set<string>; sessions: number; totalMinutes: number }>();
     for (const row of res.rows) {
-      const d = row.work_date;
-      const s = (row.decided_site_name_snapshot ?? "").trim();
-      if (!byDate.has(d)) byDate.set(d, new Set<string>());
-      if (s) byDate.get(d)!.add(s);
+      const date = row.workDate;
+      const siteName = (row.siteName ?? "").trim();
+      const current = byDate.get(date) ?? { sites: new Set<string>(), sessions: 0, totalMinutes: 0 };
+      if (siteName) current.sites.add(siteName);
+      current.sessions += Math.max(0, row.sessionCount ?? 0);
+      current.totalMinutes += Math.max(0, row.totalMinutes ?? 0);
+      byDate.set(date, current);
     }
 
-    const days = Array.from(byDate.entries()).map(([date, sitesSet]) => ({
+    const days = Array.from(byDate.entries()).map(([date, value]) => ({
       date,
-      sites: Array.from(sitesSet).sort((a, b) => a.localeCompare(b, "ja")),
+      sites: Array.from(value.sites).sort((a, b) => a.localeCompare(b, "ja")),
+      punches: value.sessions,
+      sessions: value.sessions,
+      hours: Math.round((value.totalMinutes / 60) * 100) / 100,
+      durationMin: value.totalMinutes,
     }));
 
     logEvent("info", "calendar_month_success", {
@@ -99,7 +112,7 @@ export async function GET(req: NextRequest) {
       fromDate: range.start,
       toDateExclusive: range.endExclusive,
       userId,
-      logCount: res.rows.length,
+      sessionRowCount: res.rows.length,
       dayCount: days.length,
       durationMs: Date.now() - startedAt,
     });
