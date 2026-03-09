@@ -86,3 +86,5 @@ export type DomainDtos = {
 };
 
 export type { SiteDto, MachineDto, WorkTypeDto, LogDto, SessionDto } from './domain';
+
+export type { InventoryCategory, InventoryItem, InventoryItemListEntry, InventoryLocation } from './inventory';
