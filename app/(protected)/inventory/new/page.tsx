@@ -1,45 +1,77 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import { InventoryItemForm } from '@/components/inventory/InventoryItemForm';
-import { inventoryQuery } from '@/lib/inventory/db';
 import type { InventoryCategory, InventoryLocation } from '@/types/inventory';
 
-export const runtime = 'nodejs';
+export default function InventoryNewPage() {
+  const [categories, setCategories] = useState<InventoryCategory[]>([]);
+  const [locations, setLocations] = useState<InventoryLocation[]>([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
-async function getMasters() {
-  const [categories, locations] = await Promise.all([
-    inventoryQuery(
-      `SELECT id::text as id, code, name, description, sort_order as "sortOrder", is_active as "isActive", created_at::text as "createdAt", updated_at::text as "updatedAt" FROM inventory.categories ORDER BY sort_order, name`,
-    ),
-    inventoryQuery(
-      `SELECT id::text as id, code, name, description, sort_order as "sortOrder", is_active as "isActive", created_at::text as "createdAt", updated_at::text as "updatedAt" FROM inventory.locations ORDER BY sort_order, name`,
-    ),
-  ]);
+  useEffect(() => {
+    let active = true;
 
-  return { categories: categories.rows as unknown as InventoryCategory[], locations: locations.rows as unknown as InventoryLocation[] };
-}
+    const load = async () => {
+      try {
+        const [categoriesRes, locationsRes] = await Promise.all([
+          fetch('/api/inventory/categories', { cache: 'no-store', credentials: 'same-origin' }),
+          fetch('/api/inventory/locations', { cache: 'no-store', credentials: 'same-origin' }),
+        ]);
 
-export default async function InventoryNewPage() {
-  const { categories, locations } = await getMasters();
+        if (!categoriesRes.ok || !locationsRes.ok) {
+          throw new Error('FAILED');
+        }
+
+        const [categoriesData, locationsData] = await Promise.all([
+          categoriesRes.json() as Promise<InventoryCategory[]>,
+          locationsRes.json() as Promise<InventoryLocation[]>,
+        ]);
+
+        if (!active) return;
+        setCategories(categoriesData);
+        setLocations(locationsData);
+      } catch {
+        if (!active) return;
+        setError('カテゴリ・保管場所の取得に失敗しました。');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    load();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold text-brand-text">在庫新規登録</h1>
-      <InventoryItemForm
-        mode="create"
-        categories={categories}
-        locations={locations}
-        initialValue={{
-          sku: '',
-          name: '',
-          note: '',
-          categoryId: categories.find((x) => x.isActive)?.id ?? '',
-          locationId: locations.find((x) => x.isActive)?.id ?? '',
-          quantity: 0,
-          unit: '',
-          status: 'active',
-          imageUrl: null,
-          imagePath: null,
-        }}
-      />
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {loading ? (
+        <p className="text-sm text-brand-muted">読み込み中...</p>
+      ) : (
+        <InventoryItemForm
+          mode="create"
+          categories={categories}
+          locations={locations}
+          initialValue={{
+            sku: '',
+            name: '',
+            note: '',
+            categoryId: categories.find((x) => x.isActive)?.id ?? '',
+            locationId: locations.find((x) => x.isActive)?.id ?? '',
+            quantity: 0,
+            unit: '',
+            status: 'active',
+            imageUrl: null,
+            imagePath: null,
+          }}
+        />
+      )}
     </div>
   );
 }

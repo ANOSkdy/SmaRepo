@@ -155,9 +155,9 @@ export default function InventoryPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-center justify-between gap-2">
+      <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold text-brand-text">在庫一覧</h1>
-        <div className="flex gap-3 text-sm">
+        <div className="flex flex-wrap gap-3 text-sm">
           <Link href="/inventory/new" className="text-brand-primary underline">新規登録</Link>
           <Link href="/inventory/categories" className="text-brand-primary underline">カテゴリ管理</Link>
           <Link href="/inventory/locations" className="text-brand-primary underline">保管場所管理</Link>
