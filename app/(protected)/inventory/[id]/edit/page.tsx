@@ -85,7 +85,12 @@ export default function InventoryEditPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold text-brand-text">在庫編集</h1>
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold text-brand-text">在庫編集</h1>
+        <Link href={id ? `/inventory/${id}` : "/inventory"} className="rounded border border-brand-border px-3 py-1.5 text-sm text-brand-text hover:bg-brand-surface-alt">
+          戻る
+        </Link>
+      </header>
 
       {loading ? <p className="text-sm text-brand-muted">読み込み中...</p> : null}
 

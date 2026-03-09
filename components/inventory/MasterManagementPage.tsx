@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 
 type Master = {
@@ -68,8 +69,11 @@ export function MasterManagementPage({ title, endpoint }: { title: string; endpo
 
   return (
     <div className="space-y-6">
-      <header>
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-brand-text">{title}</h1>
+        <Link href="/inventory" className="rounded border border-brand-border px-3 py-1.5 text-sm text-brand-text hover:bg-brand-surface-alt">
+          戻る
+        </Link>
       </header>
 
       <section className="rounded-lg border border-brand-border bg-brand-surface p-4">

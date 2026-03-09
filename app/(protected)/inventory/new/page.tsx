@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { InventoryItemForm } from '@/components/inventory/InventoryItemForm';
 import type { InventoryCategory, InventoryLocation } from '@/types/inventory';
@@ -49,7 +50,12 @@ export default function InventoryNewPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold text-brand-text">在庫新規登録</h1>
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold text-brand-text">在庫新規登録</h1>
+        <Link href="/inventory" className="rounded border border-brand-border px-3 py-1.5 text-sm text-brand-text hover:bg-brand-surface-alt">
+          戻る
+        </Link>
+      </header>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {loading ? (
         <p className="text-sm text-brand-muted">読み込み中...</p>
