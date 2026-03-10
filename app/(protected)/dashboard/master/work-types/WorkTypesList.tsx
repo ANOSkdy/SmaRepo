@@ -141,7 +141,7 @@ export default function WorkTypesList() {
   return (
     <div className="space-y-4">
       <form onSubmit={onSubmit} className="space-y-3 rounded-lg border border-brand-border bg-brand-surface p-4 text-sm text-brand-text">
-        <div className="flex items-center justify-between"><h2 className="text-base font-semibold">{modeLabel}</h2><button type="button" onClick={onReset} className="rounded border border-brand-border px-2 py-1">新規登録</button></div>
+        <div className="flex items-center justify-between"><h2 className="text-base font-semibold">{modeLabel}</h2><button type="button" onClick={onReset} className="rounded border border-brand-border px-2 py-1">入力クリア</button></div>
         <div className="grid gap-3 md:grid-cols-2">
           
           <label className="space-y-1"><span>作業名</span><input required className="w-full rounded border border-brand-border px-2 py-1" value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} /></label>
@@ -150,7 +150,7 @@ export default function WorkTypesList() {
           <label className="flex items-center gap-2 pt-6"><input type="checkbox" checked={form.active} onChange={(e) => setForm((prev) => ({ ...prev, active: e.target.checked }))} /><span>有効</span></label>
         </div>
         {submitError ? <p className="text-red-600">{submitError}</p> : null}
-        <div className="flex gap-2"><button disabled={saving} className="rounded bg-brand-accent px-3 py-1.5 text-white disabled:opacity-60">保存</button><button type="button" onClick={onReset} className="rounded border border-brand-border px-3 py-1.5">キャンセル</button></div>
+        <div className="flex gap-2"><button disabled={saving} className="rounded bg-brand-accent px-3 py-1.5 text-white disabled:opacity-60">{editingId ? '保存' : '新規登録'}</button><button type="button" onClick={onReset} className="rounded border border-brand-border px-3 py-1.5">キャンセル</button></div>
       </form>
 
       {loading ? <p className="text-sm text-brand-muted">読み込み中...</p> : null}
