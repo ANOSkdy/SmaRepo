@@ -14,7 +14,6 @@ type InventoryCategoryRow = {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
-  machineCode: string;
 };
 
 export async function GET() {
@@ -56,8 +55,7 @@ export async function GET() {
           0::integer AS "sortOrder",
           m.is_active AS "isActive",
           NOW()::text AS "createdAt",
-          NOW()::text AS "updatedAt",
-          m.machine_code AS "machineCode"
+          NOW()::text AS "updatedAt"
         FROM machine_rows m
         WHERE m.machine_code IS NOT NULL
         ORDER BY m.machine_code ASC
@@ -68,8 +66,4 @@ export async function GET() {
   } catch {
     return NextResponse.json({ error: 'DB_QUERY_FAILED' }, { status: 500 });
   }
-}
-
-export async function POST() {
-  return NextResponse.json({ error: 'MACHINE_BACKED_READ_ONLY' }, { status: 405 });
 }

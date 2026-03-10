@@ -7,18 +7,14 @@ type Master = {
   id: string;
   code: string;
   name: string;
-  description: string | null;
-  sortOrder: number;
-  isActive: boolean;
 };
 
-export function MasterManagementPage({ title, endpoint }: { title: string; endpoint: '/api/inventory/categories' | '/api/inventory/locations' }) {
+export function MasterManagementPage({ title, endpoint }: { title: string; endpoint: '/api/inventory/locations' }) {
   const [rows, setRows] = useState<Master[]>([]);
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const isCategoryPage = endpoint === '/api/inventory/categories';
 
   const load = useCallback(async () => {
     const response = await fetch(endpoint, { cache: 'no-store', credentials: 'same-origin' });
@@ -32,7 +28,6 @@ export function MasterManagementPage({ title, endpoint }: { title: string; endpo
 
   const onCreate = async (e: FormEvent) => {
     e.preventDefault();
-    if (isCategoryPage) return;
     setError('');
     setSaving(true);
     try {
@@ -54,7 +49,6 @@ export function MasterManagementPage({ title, endpoint }: { title: string; endpo
   };
 
   const onRename = async (id: string, next: string) => {
-    if (isCategoryPage) return;
     setError('');
     try {
       const response = await fetch(`${endpoint}/${id}`, {
@@ -99,32 +93,28 @@ export function MasterManagementPage({ title, endpoint }: { title: string; endpo
       </header>
 
       <section className="rounded-lg border border-brand-border bg-brand-surface p-4">
-        {isCategoryPage ? (
-          <p className="text-sm text-brand-muted">カテゴリは machines マスター（machine_code / name）と連動しています。この画面では参照のみ可能です。</p>
-        ) : (
-          <form onSubmit={onCreate} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto]">
-            <input
-              className="w-full rounded border border-brand-border bg-brand-surface px-3 py-2 text-sm text-brand-text"
-              placeholder="code"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              required
-            />
-            <input
-              className="w-full rounded border border-brand-border bg-brand-surface px-3 py-2 text-sm text-brand-text"
-              placeholder="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-            <button
-              disabled={saving}
-              className="rounded border border-brand-primary bg-brand-primary px-4 py-2 text-sm font-medium text-brand-primaryText"
-            >
-              {saving ? '追加中...' : '追加'}
-            </button>
-          </form>
-        )}
+        <form onSubmit={onCreate} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto]">
+          <input
+            className="w-full rounded border border-brand-border bg-brand-surface px-3 py-2 text-sm text-brand-text"
+            placeholder="code"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            required
+          />
+          <input
+            className="w-full rounded border border-brand-border bg-brand-surface px-3 py-2 text-sm text-brand-text"
+            placeholder="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+          <button
+            disabled={saving}
+            className="rounded border border-brand-primary bg-brand-primary px-4 py-2 text-sm font-medium text-brand-primaryText"
+          >
+            {saving ? '追加中...' : '追加'}
+          </button>
+        </form>
 
         {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
       </section>
@@ -137,25 +127,23 @@ export function MasterManagementPage({ title, endpoint }: { title: string; endpo
                 <p className="truncate text-sm font-medium text-brand-text">{row.name}</p>
                 <p className="text-xs text-brand-muted">{row.code}</p>
               </div>
-              {isCategoryPage ? null : (
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    className="self-start text-sm text-brand-primary underline sm:self-auto"
-                    onClick={() => {
-                      const renamed = window.prompt('新しい名称', row.name);
-                      if (renamed && renamed !== row.name) {
-                        onRename(row.id, renamed);
-                      }
-                    }}
-                  >
-                    名称変更
-                  </button>
-                  <button type="button" className="text-sm text-red-600 underline" onClick={() => onDelete(row.id)}>
-                    削除
-                  </button>
-                </div>
-              )}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  className="self-start text-sm text-brand-primary underline sm:self-auto"
+                  onClick={() => {
+                    const renamed = window.prompt('新しい名称', row.name);
+                    if (renamed && renamed !== row.name) {
+                      onRename(row.id, renamed);
+                    }
+                  }}
+                >
+                  名称変更
+                </button>
+                <button type="button" className="text-sm text-red-600 underline" onClick={() => onDelete(row.id)}>
+                  削除
+                </button>
+              </div>
             </li>
           ))}
         </ul>
