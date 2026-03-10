@@ -12,6 +12,7 @@ const nullableText = z
   });
 
 export const masterSiteCreateSchema = z.object({
+  siteCode: nullableText,
   name: z.string().trim().min(1),
   clientName: z.string().trim().optional().default(''),
   longitude: z.number().finite().min(-180).max(180),
@@ -26,6 +27,7 @@ export const masterSiteUpdateSchema = masterSiteCreateSchema
   .refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' });
 
 export const masterUserCreateSchema = z.object({
+  userCode: nullableText,
   username: z.string().trim().min(1),
   name: z.string().trim().min(1),
   phone: nullableText,
@@ -44,6 +46,7 @@ export const masterUserCreateSchema = z.object({
 
 export const masterUserUpdateSchema = z
   .object({
+    userCode: nullableText.optional(),
     username: z.string().trim().min(1).optional(),
     name: z.string().trim().min(1).optional(),
     phone: nullableText.optional(),
@@ -62,6 +65,7 @@ export const masterUserUpdateSchema = z
   .refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' });
 
 export const masterWorkTypeCreateSchema = z.object({
+  workCode: nullableText,
   name: z.string().trim().min(1),
   sortOrder: z.number().int().min(0),
   active: z.boolean().default(true),

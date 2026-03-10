@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { MasterUser } from '@/types/master';
 
 type UserForm = {
+  userCode: string;
   username: string;
   name: string;
   phone: string;
@@ -15,6 +16,7 @@ type UserForm = {
 };
 
 const EMPTY_FORM: UserForm = {
+  userCode: '',
   username: '',
   name: '',
   phone: '',
@@ -33,6 +35,7 @@ function formatDate(value: string | null) {
 }
 
 function parseError(code?: string) {
+  if (code === 'USER_CODE_EXISTS') return 'ユーザーコードが重複しています。';
   if (code === 'USERNAME_EXISTS') return 'ログインIDが重複しています。';
   if (code === 'INVALID_BODY') return '入力内容を確認してください。';
   return '保存に失敗しました。';
@@ -72,6 +75,7 @@ export default function UsersList() {
     setEditingId(item.id);
     setSubmitError('');
     setForm({
+      userCode: item.userCode ?? '',
       username: item.username,
       name: item.name,
       phone: item.phone ?? '',
@@ -95,6 +99,7 @@ export default function UsersList() {
     setSubmitError('');
 
     const payload = {
+      userCode: form.userCode,
       username: form.username,
       name: form.name,
       phone: form.phone,
@@ -155,6 +160,7 @@ export default function UsersList() {
         <div className="flex items-center justify-between"><h2 className="text-base font-semibold">{modeLabel}</h2><button type="button" onClick={onReset} className="rounded border border-brand-border px-2 py-1">入力クリア</button></div>
         <div className="grid gap-3 md:grid-cols-2">
           
+          <label className="space-y-1"><span>ユーザーコード</span><input className="w-full rounded border border-brand-border px-2 py-1" value={form.userCode} onChange={(e) => setForm((prev) => ({ ...prev, userCode: e.target.value }))} /></label>
           <label className="space-y-1"><span>ログインID</span><input required className="w-full rounded border border-brand-border px-2 py-1" value={form.username} onChange={(e) => setForm((prev) => ({ ...prev, username: e.target.value }))} /></label>
           <label className="space-y-1"><span>氏名</span><input required className="w-full rounded border border-brand-border px-2 py-1" value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} /></label>
           <label className="space-y-1"><span>電話番号</span><input className="w-full rounded border border-brand-border px-2 py-1" value={form.phone} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))} /></label>
@@ -183,6 +189,7 @@ export default function UsersList() {
           {items.map((item) => (
             <article key={item.id} className="rounded-lg border border-brand-border bg-brand-surface p-3 text-sm text-brand-text">
               <p className="font-medium">{item.name}</p>
+              <p>ユーザーコード: {item.userCode ?? '-'}</p>
               <p>ログインID: {item.username}</p>
               <p>権限: {item.role}</p>
               <p>有効: {item.active ? '有効' : '無効'}</p>
@@ -198,11 +205,11 @@ export default function UsersList() {
       {!!items.length && (
         <div className="hidden overflow-x-auto rounded-lg border border-brand-border md:block">
           <table className="min-w-full divide-y divide-brand-border text-sm text-brand-text">
-            <thead className="bg-brand-surface-alt text-left"><tr><th className="px-3 py-2">ログインID</th><th className="px-3 py-2">氏名</th><th className="px-3 py-2">電話番号</th><th className="px-3 py-2">メール</th><th className="px-3 py-2">権限</th><th className="px-3 py-2">有効</th><th className="px-3 py-2">休憩控除除外</th><th className="px-3 py-2">作成日時</th><th className="px-3 py-2">更新日時</th><th className="px-3 py-2">操作</th></tr></thead>
+            <thead className="bg-brand-surface-alt text-left"><tr><th className="px-3 py-2">ユーザーコード</th><th className="px-3 py-2">ログインID</th><th className="px-3 py-2">氏名</th><th className="px-3 py-2">電話番号</th><th className="px-3 py-2">メール</th><th className="px-3 py-2">権限</th><th className="px-3 py-2">有効</th><th className="px-3 py-2">休憩控除除外</th><th className="px-3 py-2">作成日時</th><th className="px-3 py-2">更新日時</th><th className="px-3 py-2">操作</th></tr></thead>
             <tbody className="divide-y divide-brand-border bg-brand-surface">
               {items.map((item) => (
                 <tr key={item.id}>
-                  <td className="px-3 py-2">{item.username}</td><td className="px-3 py-2">{item.name}</td><td className="px-3 py-2">{item.phone ?? '-'}</td><td className="px-3 py-2">{item.email ?? '-'}</td><td className="px-3 py-2">{item.role}</td><td className="px-3 py-2">{item.active ? '有効' : '無効'}</td><td className="px-3 py-2">{item.excludeBreakDeduction ? '対象外' : '対象'}</td><td className="px-3 py-2">{formatDate(item.createdAt)}</td><td className="px-3 py-2">{formatDate(item.updatedAt)}</td>
+                  <td className="px-3 py-2">{item.userCode ?? '-'}</td><td className="px-3 py-2">{item.username}</td><td className="px-3 py-2">{item.name}</td><td className="px-3 py-2">{item.phone ?? '-'}</td><td className="px-3 py-2">{item.email ?? '-'}</td><td className="px-3 py-2">{item.role}</td><td className="px-3 py-2">{item.active ? '有効' : '無効'}</td><td className="px-3 py-2">{item.excludeBreakDeduction ? '対象外' : '対象'}</td><td className="px-3 py-2">{formatDate(item.createdAt)}</td><td className="px-3 py-2">{formatDate(item.updatedAt)}</td>
                   <td className="px-3 py-2"><div className="flex gap-2"><button type="button" onClick={() => onEdit(item)} className="rounded border border-brand-border px-2 py-1">編集</button><button type="button" onClick={() => onToggle(item)} className="rounded border border-brand-border px-2 py-1">{item.active ? '無効化' : '有効化'}</button></div></td>
                 </tr>
               ))}

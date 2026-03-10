@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { getAdminSession } from '@/lib/master/auth';
+import { isUniqueViolation } from '@/lib/master/errors';
 import { masterWorkTypeCreateSchema } from '@/lib/master/schemas';
 import type { MasterWorkType } from '@/types/master';
 
@@ -8,14 +9,26 @@ export const runtime = 'nodejs';
 
 type WorkTypeRow = MasterWorkType;
 
-const workTypeSelectSql = `
+const workTypeSelectColumns = `
   w.id::text AS id,
+  w.work_code AS "workCode",
   w.name,
   w.sort_order AS "sortOrder",
   w.active,
   w.category,
   w.created_at::text AS "createdAt",
   w.updated_at::text AS "updatedAt"
+`;
+
+const workTypeReturningColumns = `
+  id::text AS id,
+  work_code AS "workCode",
+  name,
+  sort_order AS "sortOrder",
+  active,
+  category,
+  created_at::text AS "createdAt",
+  updated_at::text AS "updatedAt"
 `;
 
 export async function GET() {
@@ -28,7 +41,7 @@ export async function GET() {
     const result = await query<WorkTypeRow>(
       `
         SELECT
-          ${workTypeSelectSql}
+          ${workTypeSelectColumns}
         FROM public.work_types w
         ORDER BY w.sort_order ASC, w.name ASC
       `,
@@ -65,21 +78,25 @@ export async function POST(request: Request) {
     const result = await query<WorkTypeRow>(
       `
         INSERT INTO public.work_types (
+          work_code,
           name,
           sort_order,
           active,
           category
         ) VALUES (
-          $1, $2, $3, $4
+          $1, $2, $3, $4, $5
         )
         RETURNING
-          ${workTypeSelectSql}
+          ${workTypeReturningColumns}
       `,
-      [payload.name, payload.sortOrder, payload.active, payload.category],
+      [payload.workCode, payload.name, payload.sortOrder, payload.active, payload.category],
     );
 
     return NextResponse.json(result.rows[0], { status: 201 });
-  } catch {
+  } catch (error) {
+    if (isUniqueViolation(error, 'work_types_work_code_key')) {
+      return NextResponse.json({ error: 'WORK_CODE_EXISTS' }, { status: 409 });
+    }
     return NextResponse.json({ error: 'DB_WRITE_FAILED' }, { status: 500 });
   }
 }

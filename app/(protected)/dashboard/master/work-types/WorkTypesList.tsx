@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { MasterWorkType } from '@/types/master';
 
 type WorkTypeForm = {
+  workCode: string;
   name: string;
   sortOrder: string;
   active: boolean;
@@ -11,6 +12,7 @@ type WorkTypeForm = {
 };
 
 const EMPTY_FORM: WorkTypeForm = {
+  workCode: '',
   name: '',
   sortOrder: '0',
   active: true,
@@ -31,6 +33,7 @@ function formatDate(value: string | null) {
 }
 
 function parseError(code?: string) {
+  if (code === 'WORK_CODE_EXISTS') return '作業コードが重複しています。';
   if (code === 'INVALID_BODY') return '入力内容を確認してください。';
   return '保存に失敗しました。';
 }
@@ -69,6 +72,7 @@ export default function WorkTypesList() {
     setEditingId(item.id);
     setSubmitError('');
     setForm({
+      workCode: item.workCode ?? '',
       name: item.name,
       sortOrder: String(item.sortOrder),
       active: item.active,
@@ -88,6 +92,7 @@ export default function WorkTypesList() {
     setSubmitError('');
 
     const payload = {
+      workCode: form.workCode,
       name: form.name,
       sortOrder: Number(form.sortOrder),
       active: form.active,
@@ -144,6 +149,7 @@ export default function WorkTypesList() {
         <div className="flex items-center justify-between"><h2 className="text-base font-semibold">{modeLabel}</h2><button type="button" onClick={onReset} className="rounded border border-brand-border px-2 py-1">入力クリア</button></div>
         <div className="grid gap-3 md:grid-cols-2">
           
+          <label className="space-y-1"><span>作業コード</span><input className="w-full rounded border border-brand-border px-2 py-1" value={form.workCode} onChange={(e) => setForm((prev) => ({ ...prev, workCode: e.target.value }))} /></label>
           <label className="space-y-1"><span>作業名</span><input required className="w-full rounded border border-brand-border px-2 py-1" value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} /></label>
           <label className="space-y-1"><span>区分</span><select className="w-full rounded border border-brand-border px-2 py-1" value={form.category} onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value as MasterWorkType['category'] }))}><option value="operating">稼働</option><option value="regular">常用</option><option value="other">その他</option></select></label>
           <label className="space-y-1"><span>並び順</span><input required type="number" min={0} className="w-full rounded border border-brand-border px-2 py-1" value={form.sortOrder} onChange={(e) => setForm((prev) => ({ ...prev, sortOrder: e.target.value }))} /></label>
@@ -165,6 +171,7 @@ export default function WorkTypesList() {
           {items.map((item) => (
             <article key={item.id} className="rounded-lg border border-brand-border bg-brand-surface p-3 text-sm text-brand-text">
               <p className="font-medium">{item.name}</p>
+              <p>作業コード: {item.workCode ?? '-'}</p>
               <p>区分: {CATEGORY_LABELS[item.category] ?? item.category}</p>
               <p>並び順: {item.sortOrder}</p>
               <p>有効: {item.active ? '有効' : '無効'}</p>
@@ -180,10 +187,10 @@ export default function WorkTypesList() {
       {!!items.length && (
         <div className="hidden overflow-x-auto rounded-lg border border-brand-border md:block">
           <table className="min-w-full divide-y divide-brand-border text-sm text-brand-text">
-            <thead className="bg-brand-surface-alt text-left"><tr><th className="px-3 py-2">作業名</th><th className="px-3 py-2">区分</th><th className="px-3 py-2">並び順</th><th className="px-3 py-2">有効</th><th className="px-3 py-2">作成日時</th><th className="px-3 py-2">更新日時</th><th className="px-3 py-2">操作</th></tr></thead>
+            <thead className="bg-brand-surface-alt text-left"><tr><th className="px-3 py-2">作業コード</th><th className="px-3 py-2">作業名</th><th className="px-3 py-2">区分</th><th className="px-3 py-2">並び順</th><th className="px-3 py-2">有効</th><th className="px-3 py-2">作成日時</th><th className="px-3 py-2">更新日時</th><th className="px-3 py-2">操作</th></tr></thead>
             <tbody className="divide-y divide-brand-border bg-brand-surface">
               {items.map((item) => (
-                <tr key={item.id}><td className="px-3 py-2">{item.name}</td><td className="px-3 py-2">{CATEGORY_LABELS[item.category] ?? item.category}</td><td className="px-3 py-2">{item.sortOrder}</td><td className="px-3 py-2">{item.active ? '有効' : '無効'}</td><td className="px-3 py-2">{formatDate(item.createdAt)}</td><td className="px-3 py-2">{formatDate(item.updatedAt)}</td><td className="px-3 py-2"><div className="flex gap-2"><button type="button" onClick={() => onEdit(item)} className="rounded border border-brand-border px-2 py-1">編集</button><button type="button" onClick={() => onToggle(item)} className="rounded border border-brand-border px-2 py-1">{item.active ? '無効化' : '有効化'}</button></div></td></tr>
+                <tr key={item.id}><td className="px-3 py-2">{item.workCode ?? '-'}</td><td className="px-3 py-2">{item.name}</td><td className="px-3 py-2">{CATEGORY_LABELS[item.category] ?? item.category}</td><td className="px-3 py-2">{item.sortOrder}</td><td className="px-3 py-2">{item.active ? '有効' : '無効'}</td><td className="px-3 py-2">{formatDate(item.createdAt)}</td><td className="px-3 py-2">{formatDate(item.updatedAt)}</td><td className="px-3 py-2"><div className="flex gap-2"><button type="button" onClick={() => onEdit(item)} className="rounded border border-brand-border px-2 py-1">編集</button><button type="button" onClick={() => onToggle(item)} className="rounded border border-brand-border px-2 py-1">{item.active ? '無効化' : '有効化'}</button></div></td></tr>
               ))}
             </tbody>
           </table>

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { getAdminSession } from '@/lib/master/auth';
+import { isUniqueViolation } from '@/lib/master/errors';
 import { masterSiteCreateSchema } from '@/lib/master/schemas';
 import type { MasterSite } from '@/types/master';
 
@@ -8,8 +9,9 @@ export const runtime = 'nodejs';
 
 type SiteRow = MasterSite;
 
-const siteSelectSql = `
+const siteSelectColumns = `
   s.id::text AS id,
+  s.site_code AS "siteCode",
   s.name,
   s.client_name AS "clientName",
   s.active,
@@ -19,6 +21,20 @@ const siteSelectSql = `
   ST_Y(s.center_geog::geometry) AS latitude,
   s.created_at::text AS "createdAt",
   s.updated_at::text AS "updatedAt"
+`;
+
+const siteReturningColumns = `
+  id::text AS id,
+  site_code AS "siteCode",
+  name,
+  client_name AS "clientName",
+  active,
+  radius_m AS "radiusM",
+  priority,
+  ST_X(center_geog::geometry) AS longitude,
+  ST_Y(center_geog::geometry) AS latitude,
+  created_at::text AS "createdAt",
+  updated_at::text AS "updatedAt"
 `;
 
 export async function GET() {
@@ -31,7 +47,7 @@ export async function GET() {
     const result = await query<SiteRow>(
       `
         SELECT
-          ${siteSelectSql}
+          ${siteSelectColumns}
         FROM public.sites s
         ORDER BY s.priority DESC, s.name ASC
       `,
@@ -68,6 +84,7 @@ export async function POST(request: Request) {
     const result = await query<SiteRow>(
       `
         INSERT INTO public.sites (
+          site_code,
           name,
           client_name,
           center_geog,
@@ -77,19 +94,23 @@ export async function POST(request: Request) {
         ) VALUES (
           $1,
           $2,
-          ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography,
-          $5,
+          $3,
+          ST_SetSRID(ST_MakePoint($4, $5), 4326)::geography,
           $6,
-          $7
+          $7,
+          $8
         )
         RETURNING
-          ${siteSelectSql}
+          ${siteReturningColumns}
       `,
-      [payload.name, payload.clientName || null, payload.longitude, payload.latitude, payload.radiusM, payload.priority, payload.active],
+      [payload.siteCode, payload.name, payload.clientName || null, payload.longitude, payload.latitude, payload.radiusM, payload.priority, payload.active],
     );
 
     return NextResponse.json(result.rows[0], { status: 201 });
-  } catch {
+  } catch (error) {
+    if (isUniqueViolation(error, 'sites_site_code_key')) {
+      return NextResponse.json({ error: 'SITE_CODE_EXISTS' }, { status: 409 });
+    }
     return NextResponse.json({ error: 'DB_WRITE_FAILED' }, { status: 500 });
   }
 }

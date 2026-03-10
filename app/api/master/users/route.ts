@@ -10,8 +10,9 @@ export const runtime = 'nodejs';
 
 type UserRow = MasterUser;
 
-const userSelectSql = `
+const userSelectColumns = `
   u.id::text AS id,
+  u.user_code AS "userCode",
   u.username,
   u.name,
   u.phone,
@@ -21,6 +22,20 @@ const userSelectSql = `
   u.exclude_break_deduction AS "excludeBreakDeduction",
   u.created_at::text AS "createdAt",
   u.updated_at::text AS "updatedAt"
+`;
+
+const userReturningColumns = `
+  id::text AS id,
+  user_code AS "userCode",
+  username,
+  name,
+  phone,
+  email,
+  role,
+  active,
+  exclude_break_deduction AS "excludeBreakDeduction",
+  created_at::text AS "createdAt",
+  updated_at::text AS "updatedAt"
 `;
 
 export async function GET() {
@@ -33,9 +48,9 @@ export async function GET() {
     const result = await query<UserRow>(
       `
         SELECT
-          ${userSelectSql}
+          ${userSelectColumns}
         FROM public.users u
-        ORDER BY u.username ASC, u.name ASC
+        ORDER BY u.user_code ASC NULLS LAST, u.name ASC
       `,
       [],
     );
@@ -71,6 +86,7 @@ export async function POST(request: Request) {
     const result = await query<UserRow>(
       `
         INSERT INTO public.users (
+          user_code,
           username,
           name,
           phone,
@@ -80,12 +96,13 @@ export async function POST(request: Request) {
           active,
           exclude_break_deduction
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8
+          $1, $2, $3, $4, $5, $6, $7, $8, $9
         )
         RETURNING
-          ${userSelectSql}
+          ${userReturningColumns}
       `,
       [
+        payload.userCode,
         payload.username,
         payload.name,
         payload.phone,
@@ -99,6 +116,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result.rows[0], { status: 201 });
   } catch (error) {
+    if (isUniqueViolation(error, 'users_user_code_key')) {
+      return NextResponse.json({ error: 'USER_CODE_EXISTS' }, { status: 409 });
+    }
     if (isUniqueViolation(error, 'users_username_key')) {
       return NextResponse.json({ error: 'USERNAME_EXISTS' }, { status: 409 });
     }

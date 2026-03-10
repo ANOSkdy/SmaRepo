@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { getAdminSession } from '@/lib/master/auth';
+import { isUniqueViolation } from '@/lib/master/errors';
 import { masterIdSchema, masterSiteUpdateSchema } from '@/lib/master/schemas';
 import type { MasterSite } from '@/types/master';
 
@@ -8,17 +9,18 @@ export const runtime = 'nodejs';
 
 type SiteRow = MasterSite;
 
-const siteSelectSql = `
-  s.id::text AS id,
-  s.name,
-  s.client_name AS "clientName",
-  s.active,
-  s.radius_m AS "radiusM",
-  s.priority,
-  ST_X(s.center_geog::geometry) AS longitude,
-  ST_Y(s.center_geog::geometry) AS latitude,
-  s.created_at::text AS "createdAt",
-  s.updated_at::text AS "updatedAt"
+const siteReturningColumns = `
+  id::text AS id,
+  site_code AS "siteCode",
+  name,
+  client_name AS "clientName",
+  active,
+  radius_m AS "radiusM",
+  priority,
+  ST_X(center_geog::geometry) AS longitude,
+  ST_Y(center_geog::geometry) AS latitude,
+  created_at::text AS "createdAt",
+  updated_at::text AS "updatedAt"
 `;
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -58,6 +60,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     updates.push(`${sql} = $${params.length}`);
   };
 
+  if (payload.siteCode !== undefined) setField('site_code', payload.siteCode);
   if (payload.name !== undefined) setField('name', payload.name);
   if (payload.clientName !== undefined) setField('client_name', payload.clientName || null);
   if (payload.radiusM !== undefined) setField('radius_m', payload.radiusM);
@@ -84,7 +87,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           updated_at = NOW()
         WHERE s.id = $${params.length}::uuid
         RETURNING
-          ${siteSelectSql}
+          ${siteReturningColumns}
       `,
       params,
     );
@@ -94,7 +97,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
 
     return NextResponse.json(result.rows[0]);
-  } catch {
+  } catch (error) {
+    if (isUniqueViolation(error, 'sites_site_code_key')) {
+      return NextResponse.json({ error: 'SITE_CODE_EXISTS' }, { status: 409 });
+    }
     return NextResponse.json({ error: 'DB_WRITE_FAILED' }, { status: 500 });
   }
 }

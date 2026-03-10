@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { getAdminSession } from '@/lib/master/auth';
+import { isUniqueViolation } from '@/lib/master/errors';
 import { masterIdSchema, masterWorkTypeUpdateSchema } from '@/lib/master/schemas';
 import type { MasterWorkType } from '@/types/master';
 
@@ -8,14 +9,15 @@ export const runtime = 'nodejs';
 
 type WorkTypeRow = MasterWorkType;
 
-const workTypeSelectSql = `
-  w.id::text AS id,
-  w.name,
-  w.sort_order AS "sortOrder",
-  w.active,
-  w.category,
-  w.created_at::text AS "createdAt",
-  w.updated_at::text AS "updatedAt"
+const workTypeReturningColumns = `
+  id::text AS id,
+  work_code AS "workCode",
+  name,
+  sort_order AS "sortOrder",
+  active,
+  category,
+  created_at::text AS "createdAt",
+  updated_at::text AS "updatedAt"
 `;
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -51,6 +53,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     updates.push(`${sql} = $${params.length}`);
   };
 
+  if (payload.workCode !== undefined) setField('work_code', payload.workCode);
   if (payload.name !== undefined) setField('name', payload.name);
   if (payload.sortOrder !== undefined) setField('sort_order', payload.sortOrder);
   if (payload.active !== undefined) setField('active', payload.active);
@@ -71,7 +74,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           updated_at = NOW()
         WHERE w.id = $${params.length}::uuid
         RETURNING
-          ${workTypeSelectSql}
+          ${workTypeReturningColumns}
       `,
       params,
     );
@@ -81,7 +84,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
 
     return NextResponse.json(result.rows[0]);
-  } catch {
+  } catch (error) {
+    if (isUniqueViolation(error, 'work_types_work_code_key')) {
+      return NextResponse.json({ error: 'WORK_CODE_EXISTS' }, { status: 409 });
+    }
     return NextResponse.json({ error: 'DB_WRITE_FAILED' }, { status: 500 });
   }
 }
