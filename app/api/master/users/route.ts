@@ -10,6 +10,19 @@ export const runtime = 'nodejs';
 
 type UserRow = MasterUser;
 
+const userReturningSql = `
+  id::text AS id,
+  username,
+  name,
+  phone,
+  email,
+  role,
+  active,
+  exclude_break_deduction AS "excludeBreakDeduction",
+  created_at::text AS "createdAt",
+  updated_at::text AS "updatedAt"
+`;
+
 const userSelectSql = `
   u.id::text AS id,
   u.username,
@@ -83,7 +96,7 @@ export async function POST(request: Request) {
           $1, $2, $3, $4, $5, $6, $7, $8
         )
         RETURNING
-          ${userSelectSql}
+          ${userReturningSql}
       `,
       [
         payload.username,

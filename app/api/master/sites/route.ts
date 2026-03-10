@@ -8,6 +8,19 @@ export const runtime = 'nodejs';
 
 type SiteRow = MasterSite;
 
+const siteReturningSql = `
+  id::text AS id,
+  name,
+  client_name AS "clientName",
+  active,
+  radius_m AS "radiusM",
+  priority,
+  ST_X(center_geog::geometry) AS longitude,
+  ST_Y(center_geog::geometry) AS latitude,
+  created_at::text AS "createdAt",
+  updated_at::text AS "updatedAt"
+`;
+
 const siteSelectSql = `
   s.id::text AS id,
   s.name,
@@ -83,7 +96,7 @@ export async function POST(request: Request) {
           $7
         )
         RETURNING
-          ${siteSelectSql}
+          ${siteReturningSql}
       `,
       [payload.name, payload.clientName || null, payload.longitude, payload.latitude, payload.radiusM, payload.priority, payload.active],
     );

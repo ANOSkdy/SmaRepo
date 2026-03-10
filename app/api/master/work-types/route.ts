@@ -8,6 +8,16 @@ export const runtime = 'nodejs';
 
 type WorkTypeRow = MasterWorkType;
 
+const workTypeReturningSql = `
+  id::text AS id,
+  name,
+  sort_order AS "sortOrder",
+  active,
+  category,
+  created_at::text AS "createdAt",
+  updated_at::text AS "updatedAt"
+`;
+
 const workTypeSelectSql = `
   w.id::text AS id,
   w.name,
@@ -73,7 +83,7 @@ export async function POST(request: Request) {
           $1, $2, $3, $4
         )
         RETURNING
-          ${workTypeSelectSql}
+          ${workTypeReturningSql}
       `,
       [payload.name, payload.sortOrder, payload.active, payload.category],
     );
