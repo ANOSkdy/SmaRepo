@@ -26,17 +26,39 @@ export async function GET() {
   try {
     const result = await inventoryQuery<InventoryCategoryRow>(
       `
+        WITH machine_rows AS (
+          SELECT
+            COALESCE(
+              NULLIF(payload->>'machine_code', ''),
+              NULLIF(payload->>'machineid', ''),
+              NULLIF(payload->>'machine_id', '')
+            ) AS machine_code,
+            COALESCE(
+              NULLIF(payload->>'name', ''),
+              NULLIF(payload->>'machine_name', ''),
+              NULLIF(payload->>'machineName', '')
+            ) AS machine_name,
+            CASE
+              WHEN lower(COALESCE(payload->>'active', 'true')) IN ('1', 'true', 't', 'yes', 'on') THEN TRUE
+              WHEN lower(COALESCE(payload->>'active', 'true')) IN ('0', 'false', 'f', 'no', 'off') THEN FALSE
+              ELSE TRUE
+            END AS is_active
+          FROM (
+            SELECT to_jsonb(m) AS payload
+            FROM machines m
+          ) src
+        )
         SELECT
-          m.machine_code::text AS id,
-          m.machine_code::text AS code,
-          m.name,
+          m.machine_code AS id,
+          m.machine_code AS code,
+          COALESCE(m.machine_name, m.machine_code) AS name,
           NULL::text AS description,
           0::integer AS "sortOrder",
-          m.active AS "isActive",
+          m.is_active AS "isActive",
           NOW()::text AS "createdAt",
           NOW()::text AS "updatedAt",
-          m.machine_code::text AS "machineCode"
-        FROM machines m
+          m.machine_code AS "machineCode"
+        FROM machine_rows m
         WHERE m.machine_code IS NOT NULL
         ORDER BY m.machine_code ASC
       `,

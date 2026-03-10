@@ -56,6 +56,23 @@ export async function GET(request: Request) {
   try {
     const result = await inventoryQuery<InventoryItemListRow>(
       `
+        WITH machine_rows AS (
+          SELECT
+            COALESCE(
+              NULLIF(payload->>'machine_code', ''),
+              NULLIF(payload->>'machineid', ''),
+              NULLIF(payload->>'machine_id', '')
+            ) AS machine_code,
+            COALESCE(
+              NULLIF(payload->>'name', ''),
+              NULLIF(payload->>'machine_name', ''),
+              NULLIF(payload->>'machineName', '')
+            ) AS machine_name
+          FROM (
+            SELECT to_jsonb(m) AS payload
+            FROM machines m
+          ) src
+        )
         SELECT
           i.id::text AS id,
           i.sku,
@@ -70,10 +87,10 @@ export async function GET(request: Request) {
           i.is_active AS "isActive",
           i.created_at::text AS "createdAt",
           i.updated_at::text AS "updatedAt",
-          COALESCE(m.name, i.category_id) AS "categoryName",
+          COALESCE(m.machine_name, i.category_id) AS "categoryName",
           l.name AS "locationName"
         FROM inventory.items i
-        LEFT JOIN machines m ON m.machine_code::text = i.category_id
+        LEFT JOIN machine_rows m ON m.machine_code = i.category_id
         JOIN inventory.locations l ON l.id = i.location_id
         ${whereClause}
         ORDER BY i.name ASC
