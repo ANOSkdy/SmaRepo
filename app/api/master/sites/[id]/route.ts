@@ -10,7 +10,6 @@ type SiteRow = MasterSite;
 
 const siteSelectSql = `
   s.id::text AS id,
-  s.site_code AS "siteCode",
   s.name,
   s.client_name AS "clientName",
   s.active,
@@ -59,7 +58,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     updates.push(`${sql} = $${params.length}`);
   };
 
-  if (payload.siteCode !== undefined) setField('site_code', payload.siteCode || null);
   if (payload.name !== undefined) setField('name', payload.name);
   if (payload.clientName !== undefined) setField('client_name', payload.clientName || null);
   if (payload.radiusM !== undefined) setField('radius_m', payload.radiusM);

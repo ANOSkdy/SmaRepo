@@ -12,7 +12,6 @@ type UserRow = MasterUser;
 
 const userSelectSql = `
   u.id::text AS id,
-  u.user_code AS "userCode",
   u.username,
   u.name,
   u.phone,
@@ -36,7 +35,7 @@ export async function GET() {
         SELECT
           ${userSelectSql}
         FROM public.users u
-        ORDER BY u.user_code ASC NULLS LAST, u.name ASC
+        ORDER BY u.username ASC, u.name ASC
       `,
       [],
     );
@@ -72,7 +71,6 @@ export async function POST(request: Request) {
     const result = await query<UserRow>(
       `
         INSERT INTO public.users (
-          user_code,
           username,
           name,
           phone,
@@ -82,13 +80,12 @@ export async function POST(request: Request) {
           active,
           exclude_break_deduction
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9
+          $1, $2, $3, $4, $5, $6, $7, $8
         )
         RETURNING
           ${userSelectSql}
       `,
       [
-        payload.userCode || null,
         payload.username,
         payload.name,
         payload.phone,
@@ -102,9 +99,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result.rows[0], { status: 201 });
   } catch (error) {
-    if (isUniqueViolation(error, 'users_user_code_key')) {
-      return NextResponse.json({ error: 'USER_CODE_EXISTS' }, { status: 409 });
-    }
     if (isUniqueViolation(error, 'users_username_key')) {
       return NextResponse.json({ error: 'USERNAME_EXISTS' }, { status: 409 });
     }

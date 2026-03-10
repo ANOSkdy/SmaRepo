@@ -31,7 +31,6 @@ function formatDate(value: string | null) {
 }
 
 function parseError(code?: string) {
-  if (code === 'WORK_CODE_EXISTS') return 'コードが重複しています。';
   if (code === 'INVALID_BODY') return '入力内容を確認してください。';
   return '保存に失敗しました。';
 }
@@ -180,10 +179,10 @@ export default function WorkTypesList() {
       {!!items.length && (
         <div className="hidden overflow-x-auto rounded-lg border border-brand-border md:block">
           <table className="min-w-full divide-y divide-brand-border text-sm text-brand-text">
-            <thead className="bg-brand-surface-alt text-left"><tr><th className="px-3 py-2">コード</th><th className="px-3 py-2">作業名</th><th className="px-3 py-2">区分</th><th className="px-3 py-2">並び順</th><th className="px-3 py-2">有効</th><th className="px-3 py-2">作成日時</th><th className="px-3 py-2">更新日時</th><th className="px-3 py-2">操作</th></tr></thead>
+            <thead className="bg-brand-surface-alt text-left"><tr><th className="px-3 py-2">作業名</th><th className="px-3 py-2">区分</th><th className="px-3 py-2">並び順</th><th className="px-3 py-2">有効</th><th className="px-3 py-2">作成日時</th><th className="px-3 py-2">更新日時</th><th className="px-3 py-2">操作</th></tr></thead>
             <tbody className="divide-y divide-brand-border bg-brand-surface">
               {items.map((item) => (
-                <tr key={item.id}><td className="px-3 py-2">{item.workCode ?? '-'}</td><td className="px-3 py-2">{item.name}</td><td className="px-3 py-2">{CATEGORY_LABELS[item.category] ?? item.category}</td><td className="px-3 py-2">{item.sortOrder}</td><td className="px-3 py-2">{item.active ? '有効' : '無効'}</td><td className="px-3 py-2">{formatDate(item.createdAt)}</td><td className="px-3 py-2">{formatDate(item.updatedAt)}</td><td className="px-3 py-2"><div className="flex gap-2"><button type="button" onClick={() => onEdit(item)} className="rounded border border-brand-border px-2 py-1">編集</button><button type="button" onClick={() => onToggle(item)} className="rounded border border-brand-border px-2 py-1">{item.active ? '無効化' : '有効化'}</button></div></td></tr>
+                <tr key={item.id}><td className="px-3 py-2">{item.name}</td><td className="px-3 py-2">{CATEGORY_LABELS[item.category] ?? item.category}</td><td className="px-3 py-2">{item.sortOrder}</td><td className="px-3 py-2">{item.active ? '有効' : '無効'}</td><td className="px-3 py-2">{formatDate(item.createdAt)}</td><td className="px-3 py-2">{formatDate(item.updatedAt)}</td><td className="px-3 py-2"><div className="flex gap-2"><button type="button" onClick={() => onEdit(item)} className="rounded border border-brand-border px-2 py-1">編集</button><button type="button" onClick={() => onToggle(item)} className="rounded border border-brand-border px-2 py-1">{item.active ? '無効化' : '有効化'}</button></div></td></tr>
               ))}
             </tbody>
           </table>

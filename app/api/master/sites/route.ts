@@ -10,7 +10,6 @@ type SiteRow = MasterSite;
 
 const siteSelectSql = `
   s.id::text AS id,
-  s.site_code AS "siteCode",
   s.name,
   s.client_name AS "clientName",
   s.active,
@@ -69,7 +68,6 @@ export async function POST(request: Request) {
     const result = await query<SiteRow>(
       `
         INSERT INTO public.sites (
-          site_code,
           name,
           client_name,
           center_geog,
@@ -79,16 +77,15 @@ export async function POST(request: Request) {
         ) VALUES (
           $1,
           $2,
-          $3,
-          ST_SetSRID(ST_MakePoint($4, $5), 4326)::geography,
+          ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography,
+          $5,
           $6,
-          $7,
-          $8
+          $7
         )
         RETURNING
           ${siteSelectSql}
       `,
-      [payload.siteCode || null, payload.name, payload.clientName || null, payload.longitude, payload.latitude, payload.radiusM, payload.priority, payload.active],
+      [payload.name, payload.clientName || null, payload.longitude, payload.latitude, payload.radiusM, payload.priority, payload.active],
     );
 
     return NextResponse.json(result.rows[0], { status: 201 });

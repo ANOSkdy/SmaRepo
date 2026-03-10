@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { getAdminSession } from '@/lib/master/auth';
-import { isUniqueViolation } from '@/lib/master/errors';
 import { masterWorkTypeCreateSchema } from '@/lib/master/schemas';
 import type { MasterWorkType } from '@/types/master';
 
@@ -11,7 +10,6 @@ type WorkTypeRow = MasterWorkType;
 
 const workTypeSelectSql = `
   w.id::text AS id,
-  w.work_code AS "workCode",
   w.name,
   w.sort_order AS "sortOrder",
   w.active,
@@ -67,25 +65,21 @@ export async function POST(request: Request) {
     const result = await query<WorkTypeRow>(
       `
         INSERT INTO public.work_types (
-          work_code,
           name,
           sort_order,
           active,
           category
         ) VALUES (
-          $1, $2, $3, $4, $5
+          $1, $2, $3, $4
         )
         RETURNING
           ${workTypeSelectSql}
       `,
-      [payload.workCode || null, payload.name, payload.sortOrder, payload.active, payload.category],
+      [payload.name, payload.sortOrder, payload.active, payload.category],
     );
 
     return NextResponse.json(result.rows[0], { status: 201 });
-  } catch (error) {
-    if (isUniqueViolation(error, 'work_types_work_code_key')) {
-      return NextResponse.json({ error: 'WORK_CODE_EXISTS' }, { status: 409 });
-    }
+  } catch {
     return NextResponse.json({ error: 'DB_WRITE_FAILED' }, { status: 500 });
   }
 }

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { getAdminSession } from '@/lib/master/auth';
-import { isUniqueViolation } from '@/lib/master/errors';
 import { masterIdSchema, masterWorkTypeUpdateSchema } from '@/lib/master/schemas';
 import type { MasterWorkType } from '@/types/master';
 
@@ -11,7 +10,6 @@ type WorkTypeRow = MasterWorkType;
 
 const workTypeSelectSql = `
   w.id::text AS id,
-  w.work_code AS "workCode",
   w.name,
   w.sort_order AS "sortOrder",
   w.active,
@@ -53,7 +51,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     updates.push(`${sql} = $${params.length}`);
   };
 
-  if (payload.workCode !== undefined) setField('work_code', payload.workCode);
   if (payload.name !== undefined) setField('name', payload.name);
   if (payload.sortOrder !== undefined) setField('sort_order', payload.sortOrder);
   if (payload.active !== undefined) setField('active', payload.active);
@@ -84,10 +81,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
 
     return NextResponse.json(result.rows[0]);
-  } catch (error) {
-    if (isUniqueViolation(error, 'work_types_work_code_key')) {
-      return NextResponse.json({ error: 'WORK_CODE_EXISTS' }, { status: 409 });
-    }
+  } catch {
     return NextResponse.json({ error: 'DB_WRITE_FAILED' }, { status: 500 });
   }
 }

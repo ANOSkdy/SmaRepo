@@ -11,7 +11,6 @@ type UserRow = MasterUser;
 
 const userSelectSql = `
   u.id::text AS id,
-  u.user_code AS "userCode",
   u.username,
   u.name,
   u.phone,
@@ -56,7 +55,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     updates.push(`${sql} = $${params.length}`);
   };
 
-  if (payload.userCode !== undefined) setField('user_code', payload.userCode);
   if (payload.username !== undefined) setField('username', payload.username);
   if (payload.name !== undefined) setField('name', payload.name);
   if (payload.phone !== undefined) setField('phone', payload.phone);
@@ -91,9 +89,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     return NextResponse.json(result.rows[0]);
   } catch (error) {
-    if (isUniqueViolation(error, 'users_user_code_key')) {
-      return NextResponse.json({ error: 'USER_CODE_EXISTS' }, { status: 409 });
-    }
     if (isUniqueViolation(error, 'users_username_key')) {
       return NextResponse.json({ error: 'USERNAME_EXISTS' }, { status: 409 });
     }

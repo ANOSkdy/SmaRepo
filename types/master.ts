@@ -1,6 +1,5 @@
 export type MasterSite = {
   id: string;
-  siteCode: string | null;
   name: string | null;
   clientName: string | null;
   active: boolean;
@@ -14,7 +13,6 @@ export type MasterSite = {
 
 export type MasterUser = {
   id: string;
-  userCode: string | null;
   username: string;
   name: string;
   phone: string | null;
@@ -28,7 +26,6 @@ export type MasterUser = {
 
 export type MasterWorkType = {
   id: string;
-  workCode: string | null;
   name: string;
   sortOrder: number;
   active: boolean;

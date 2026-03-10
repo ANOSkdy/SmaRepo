@@ -217,13 +217,13 @@ export default function SitesList() {
           <table className="min-w-full divide-y divide-brand-border text-sm text-brand-text">
             <thead className="bg-brand-surface-alt text-left">
               <tr>
-                <th className="px-3 py-2">現場コード</th><th className="px-3 py-2">現場名</th><th className="px-3 py-2">元請名</th><th className="px-3 py-2">有効</th><th className="px-3 py-2">半径(m)</th><th className="px-3 py-2">優先度</th><th className="px-3 py-2">経度</th><th className="px-3 py-2">緯度</th><th className="px-3 py-2">作成日時</th><th className="px-3 py-2">更新日時</th><th className="px-3 py-2">操作</th>
+                <th className="px-3 py-2">現場名</th><th className="px-3 py-2">元請名</th><th className="px-3 py-2">有効</th><th className="px-3 py-2">半径(m)</th><th className="px-3 py-2">優先度</th><th className="px-3 py-2">経度</th><th className="px-3 py-2">緯度</th><th className="px-3 py-2">作成日時</th><th className="px-3 py-2">更新日時</th><th className="px-3 py-2">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-brand-border bg-brand-surface">
               {items.map((item) => (
                 <tr key={item.id}>
-                  <td className="px-3 py-2">{item.siteCode ?? '-'}</td><td className="px-3 py-2">{item.name ?? '-'}</td><td className="px-3 py-2">{item.clientName ?? '-'}</td><td className="px-3 py-2">{item.active ? '有効' : '無効'}</td><td className="px-3 py-2">{item.radiusM ?? '-'}</td><td className="px-3 py-2">{item.priority ?? '-'}</td><td className="px-3 py-2">{item.longitude ?? '-'}</td><td className="px-3 py-2">{item.latitude ?? '-'}</td><td className="px-3 py-2">{formatDate(item.createdAt)}</td><td className="px-3 py-2">{formatDate(item.updatedAt)}</td>
+                  <td className="px-3 py-2">{item.name ?? '-'}</td><td className="px-3 py-2">{item.clientName ?? '-'}</td><td className="px-3 py-2">{item.active ? '有効' : '無効'}</td><td className="px-3 py-2">{item.radiusM ?? '-'}</td><td className="px-3 py-2">{item.priority ?? '-'}</td><td className="px-3 py-2">{item.longitude ?? '-'}</td><td className="px-3 py-2">{item.latitude ?? '-'}</td><td className="px-3 py-2">{formatDate(item.createdAt)}</td><td className="px-3 py-2">{formatDate(item.updatedAt)}</td>
                   <td className="px-3 py-2">
                     <div className="flex gap-2">
                       <button type="button" onClick={() => onEdit(item)} className="rounded border border-brand-border px-2 py-1">編集</button>
