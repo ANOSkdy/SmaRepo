@@ -167,7 +167,7 @@ export default function UsersList() {
         {submitError ? <p className="text-red-600">{submitError}</p> : null}
         <p className="text-xs text-brand-muted">入力後は「登録」ボタンを押してください。</p>
         <div className="flex gap-2">
-          <button disabled={saving} className="rounded bg-brand-accent px-3 py-1.5 text-white disabled:opacity-60">{editingId ? '更新' : '登録'}</button>
+          <button disabled={saving} className="rounded border border-black bg-white px-3 py-1.5 text-black disabled:opacity-60">{editingId ? '更新' : '登録'}</button>
           <button type="button" onClick={onReset} className="rounded border border-brand-border px-3 py-1.5">キャンセル</button>
         </div>
       </form>
