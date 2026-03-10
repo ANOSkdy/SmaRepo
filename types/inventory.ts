@@ -1,6 +1,7 @@
 export interface InventoryCategory {
   id: string;
   code: string;
+  machineCode?: string;
   name: string;
   description: string | null;
   sortOrder: number;

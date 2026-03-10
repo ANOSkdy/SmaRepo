@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { InventoryCategory, InventoryLocation } from '@/types/inventory';
 
@@ -46,6 +46,7 @@ export default function InventoryPage() {
   const [locations, setLocations] = useState<InventoryLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [carryingId, setCarryingId] = useState<string>('');
 
   const defaultQ = searchParams.get('q') ?? '';
   const defaultCategoryId = searchParams.get('categoryId') ?? '';
@@ -104,42 +105,52 @@ export default function InventoryPage() {
     };
   }, []);
 
-  useEffect(() => {
-    let active = true;
+  const fetchItems = useCallback(async () => {
+    setLoading(true);
+    setError('');
 
-    const fetchItems = async () => {
-      setLoading(true);
-      setError('');
+    try {
+      const response = await fetch(`/api/inventory/items${queryString ? `?${queryString}` : ''}`, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+      });
 
-      try {
-        const response = await fetch(`/api/inventory/items${queryString ? `?${queryString}` : ''}`, {
-          cache: 'no-store',
-          credentials: 'same-origin',
-        });
-
-        if (!response.ok) {
-          throw new Error('failed to fetch items');
-        }
-
-        const data = (await response.json()) as InventoryListItem[];
-        if (!active) return;
-        setItems(data);
-      } catch {
-        if (!active) return;
-        setError('在庫一覧の取得に失敗しました。');
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
+      if (!response.ok) {
+        throw new Error('failed to fetch items');
       }
-    };
 
-    fetchItems();
-
-    return () => {
-      active = false;
-    };
+      setItems((await response.json()) as InventoryListItem[]);
+    } catch {
+      setError('在庫一覧の取得に失敗しました。');
+    } finally {
+      setLoading(false);
+    }
   }, [queryString]);
+
+  useEffect(() => {
+    fetchItems();
+  }, [fetchItems]);
+
+  const onCarryOut = async (id: string) => {
+    setCarryingId(id);
+    setError('');
+    try {
+      const response = await fetch(`/api/inventory/items/${id}/carry-out`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ amount: 1 }),
+      });
+      if (!response.ok) {
+        throw new Error('FAILED');
+      }
+      await fetchItems();
+    } catch {
+      setError('持ち出し処理に失敗しました。');
+    } finally {
+      setCarryingId('');
+    }
+  };
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -262,6 +273,16 @@ export default function InventoryPage() {
                     <p className="text-brand-text">数量: <span className="font-medium">{item.quantity}{item.unit ? ` ${item.unit}` : ''}</span></p>
                     <p className="text-xs text-brand-muted">{formatDateTime(item.updatedAt)}</p>
                   </div>
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => onCarryOut(item.id)}
+                      disabled={carryingId === item.id || item.quantity <= 0}
+                      className="rounded border border-brand-primary px-3 py-1.5 text-xs text-brand-primary disabled:opacity-50"
+                    >
+                      {carryingId === item.id ? '処理中...' : '持ち出し -1'}
+                    </button>
+                  </div>
                 </article>
               );
             })}
@@ -279,6 +300,7 @@ export default function InventoryPage() {
                   <th className="px-3 py-2 font-semibold">数量</th>
                   <th className="px-3 py-2 font-semibold">単位</th>
                   <th className="px-3 py-2 font-semibold">更新日時</th>
+                  <th className="px-3 py-2 font-semibold">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -304,6 +326,16 @@ export default function InventoryPage() {
                       <td className="px-3 py-2">{item.quantity}</td>
                       <td className="px-3 py-2">{item.unit ?? '-'}</td>
                       <td className="px-3 py-2 text-brand-muted">{formatDateTime(item.updatedAt)}</td>
+                      <td className="px-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() => onCarryOut(item.id)}
+                          disabled={carryingId === item.id || item.quantity <= 0}
+                          className="rounded border border-brand-primary px-2 py-1 text-xs text-brand-primary disabled:opacity-50"
+                        >
+                          {carryingId === item.id ? '処理中...' : '-1'}
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}

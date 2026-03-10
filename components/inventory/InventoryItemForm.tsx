@@ -33,6 +33,7 @@ export function InventoryItemForm({
   const [value, setValue] = useState(initialValue);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => setValue(initialValue), [initialValue]);
@@ -103,6 +104,26 @@ export function InventoryItemForm({
       setError('保存に失敗しました。入力内容をご確認ください。');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const onDelete = async () => {
+    if (mode !== 'edit' || !value.id) return;
+    if (!window.confirm('この在庫を削除します。よろしいですか？')) return;
+
+    setDeleting(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/inventory/items/${value.id}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      });
+      if (!response.ok) throw new Error('FAILED');
+      router.push('/inventory');
+      router.refresh();
+    } catch {
+      setError('削除に失敗しました。');
+      setDeleting(false);
     }
   };
 
@@ -179,8 +200,13 @@ export function InventoryItemForm({
       {value.imageUrl ? <img src={value.imageUrl} alt="uploaded" className="h-28 w-28 rounded object-cover" /> : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
-      <div className="flex justify-end">
-        <button type="submit" disabled={saving || uploading} className="rounded bg-brand-primary px-4 py-2 text-sm text-brand-primaryText">
+      <div className="flex justify-between gap-3">
+        {mode === 'edit' ? (
+          <button type="button" onClick={onDelete} disabled={saving || uploading || deleting} className="rounded border border-red-600 px-4 py-2 text-sm text-red-600">
+            {deleting ? '削除中...' : '削除'}
+          </button>
+        ) : <div />}
+        <button type="submit" disabled={saving || uploading || deleting} className="rounded bg-brand-primary px-4 py-2 text-sm text-brand-primaryText">
           {uploading ? '画像アップロード中...' : saving ? '保存中...' : mode === 'create' ? '登録する' : '更新する'}
         </button>
       </div>

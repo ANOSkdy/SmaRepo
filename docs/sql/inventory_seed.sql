@@ -1,13 +1,6 @@
 -- Inventory MVP seed data (PR1)
 -- Requires docs/sql/inventory_schema.sql applied first.
 
-INSERT INTO inventory.categories (code, name, description, sort_order)
-VALUES
-  ('TOOLS', 'Tools', 'Hand tools and measuring instruments', 10),
-  ('PARTS', 'Parts', 'Repair and replacement parts', 20),
-  ('SAFETY', 'Safety', 'Protective and safety supplies', 30)
-ON CONFLICT (code) DO NOTHING;
-
 INSERT INTO inventory.locations (code, name, description, sort_order)
 VALUES
   ('MAIN-WH', 'Main Warehouse', 'Primary stock location', 10),
@@ -20,7 +13,7 @@ SELECT
   seed.sku,
   seed.name,
   seed.description,
-  c.id,
+  seed.category_code,
   l.id,
   seed.quantity,
   seed.unit,
@@ -62,6 +55,5 @@ FROM (
       NULL
     )
 ) AS seed(sku, name, description, category_code, location_code, quantity, unit, image_url, image_path)
-JOIN inventory.categories c ON c.code = seed.category_code
 JOIN inventory.locations l ON l.code = seed.location_code
 ON CONFLICT (sku) DO NOTHING;

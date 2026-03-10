@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { inventoryQuery } from '@/lib/inventory/db';
-import { inventoryMasterCreateSchema, normalizeNullableText } from '@/lib/inventory/schemas';
 import type { InventoryCategory } from '@/types/inventory';
 
 export const runtime = 'nodejs';
@@ -15,6 +14,7 @@ type InventoryCategoryRow = {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  machineCode: string;
 };
 
 export async function GET() {
@@ -26,17 +26,41 @@ export async function GET() {
   try {
     const result = await inventoryQuery<InventoryCategoryRow>(
       `
+        WITH machine_rows AS (
+          SELECT
+            COALESCE(
+              NULLIF(payload->>'machine_code', ''),
+              NULLIF(payload->>'machineid', ''),
+              NULLIF(payload->>'machine_id', '')
+            ) AS machine_code,
+            COALESCE(
+              NULLIF(payload->>'name', ''),
+              NULLIF(payload->>'machine_name', ''),
+              NULLIF(payload->>'machineName', '')
+            ) AS machine_name,
+            CASE
+              WHEN lower(COALESCE(payload->>'active', 'true')) IN ('1', 'true', 't', 'yes', 'on') THEN TRUE
+              WHEN lower(COALESCE(payload->>'active', 'true')) IN ('0', 'false', 'f', 'no', 'off') THEN FALSE
+              ELSE TRUE
+            END AS is_active
+          FROM (
+            SELECT to_jsonb(m) AS payload
+            FROM machines m
+          ) src
+        )
         SELECT
-          c.id::text AS id,
-          c.code,
-          c.name,
-          c.description,
-          c.sort_order AS "sortOrder",
-          c.is_active AS "isActive",
-          c.created_at::text AS "createdAt",
-          c.updated_at::text AS "updatedAt"
-        FROM inventory.categories c
-        ORDER BY c.sort_order ASC, c.name ASC
+          m.machine_code AS id,
+          m.machine_code AS code,
+          COALESCE(m.machine_name, m.machine_code) AS name,
+          NULL::text AS description,
+          0::integer AS "sortOrder",
+          m.is_active AS "isActive",
+          NOW()::text AS "createdAt",
+          NOW()::text AS "updatedAt",
+          m.machine_code AS "machineCode"
+        FROM machine_rows m
+        WHERE m.machine_code IS NOT NULL
+        ORDER BY m.machine_code ASC
       `,
     );
 
@@ -46,38 +70,6 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
-  }
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'INVALID_JSON' }, { status: 400 });
-  }
-
-  const parsed = inventoryMasterCreateSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: 'INVALID_BODY' }, { status: 400 });
-  }
-
-  const payload = parsed.data;
-
-  try {
-    const result = await inventoryQuery<{ id: string }>(
-      `
-      INSERT INTO inventory.categories (code, name, description, sort_order, is_active)
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING id::text AS id
-      `,
-      [payload.code, payload.name, normalizeNullableText(payload.description), payload.sortOrder, payload.isActive],
-    );
-
-    return NextResponse.json({ id: result.rows[0]?.id ?? null }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: 'DB_WRITE_FAILED' }, { status: 500 });
-  }
+export async function POST() {
+  return NextResponse.json({ error: 'MACHINE_BACKED_READ_ONLY' }, { status: 405 });
 }

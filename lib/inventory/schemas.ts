@@ -1,12 +1,13 @@
 import { z } from 'zod';
 
 const uuidSchema = z.string().uuid();
+const machineCodeSchema = z.string().trim().min(1).max(100);
 
 export const inventoryItemBaseSchema = z.object({
   sku: z.string().trim().min(1).max(100),
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().max(2000).optional().nullable(),
-  categoryId: uuidSchema,
+  categoryId: machineCodeSchema,
   locationId: uuidSchema,
   quantity: z.coerce.number().int().min(0).max(9999999),
   unit: z.string().trim().max(50).optional().nullable(),
@@ -42,4 +43,3 @@ export function normalizeNullableText(value?: string | null) {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
-

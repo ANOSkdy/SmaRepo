@@ -72,3 +72,45 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     return NextResponse.json({ error: 'DB_WRITE_FAILED' }, { status: 500 });
   }
 }
+
+
+export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  }
+
+  const routeParams = await context.params;
+  const parsedParams = paramsSchema.safeParse(routeParams);
+  if (!parsedParams.success) {
+    return NextResponse.json({ error: 'INVALID_ID' }, { status: 400 });
+  }
+
+  try {
+    const usage = await inventoryQuery<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM inventory.items WHERE location_id = $1::uuid`,
+      [parsedParams.data.id],
+    );
+
+    if (Number(usage.rows[0]?.count ?? 0) > 0) {
+      return NextResponse.json({ error: 'LOCATION_IN_USE' }, { status: 409 });
+    }
+
+    const result = await inventoryQuery<{ id: string }>(
+      `
+      DELETE FROM inventory.locations
+      WHERE id = $1::uuid
+      RETURNING id::text AS id
+      `,
+      [parsedParams.data.id],
+    );
+
+    if (!result.rows[0]) {
+      return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
+    }
+
+    return NextResponse.json({ id: result.rows[0].id });
+  } catch {
+    return NextResponse.json({ error: 'DB_WRITE_FAILED' }, { status: 500 });
+  }
+}
