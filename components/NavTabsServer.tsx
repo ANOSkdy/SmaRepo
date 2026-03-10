@@ -5,5 +5,6 @@ export const dynamic = 'force-dynamic';
 
 export default async function NavTabsServer() {
   const role = await getCurrentUserRole();
-  return <AppHeader showNfc={!isRoleUser(role)} />;
+  const isAdmin = role === 'admin';
+  return <AppHeader showNfc={!isRoleUser(role)} showMaster={isAdmin} />;
 }

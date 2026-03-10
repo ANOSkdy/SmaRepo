@@ -13,10 +13,13 @@ const NAV_TABS = [
   { href: `/nfc?machineId=${DEFAULT_MACHINE_ID}`, label: '打刻ページ' },
 ] as const;
 
+const MASTER_TAB = { href: '/dashboard/master', label: 'マスタ管理' } as const;
+
 type NavTab = (typeof NAV_TABS)[number];
 
 type NavTabsProps = {
   showNfc?: boolean;
+  showMaster?: boolean;
 };
 
 function isActivePath(currentPath: string | null, href: string): boolean {
@@ -32,13 +35,14 @@ function filterTabs(tabs: readonly NavTab[], showNfc: boolean): readonly NavTab[
   return tabs.filter((tab) => tab.href.split('?')[0] !== '/nfc');
 }
 
-export default function NavTabs({ showNfc = true }: NavTabsProps) {
+export default function NavTabs({ showNfc = true, showMaster = false }: NavTabsProps) {
   const pathname = usePathname();
   const tabsToRender = filterTabs(NAV_TABS, showNfc);
+  const tabs = showMaster ? [...tabsToRender, MASTER_TAB] : tabsToRender;
 
   return (
     <nav role="navigation" aria-label="主要タブナビゲーション" className="flex items-center gap-1 text-sm font-medium">
-      {tabsToRender.map((tab) => {
+      {tabs.map((tab) => {
         const active = isActivePath(pathname, tab.href);
         return (
           <Link

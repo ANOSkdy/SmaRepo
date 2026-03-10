@@ -7,13 +7,15 @@ import NavTabs, { NAV_TABS, filterTabs, isActivePath } from './NavTabs';
 
 type AppHeaderProps = {
   showNfc?: boolean;
+  showMaster?: boolean;
 };
 
-export default function AppHeader({ showNfc = true }: AppHeaderProps) {
+export default function AppHeader({ showNfc = true, showMaster = false }: AppHeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
   const menuId = useId();
   const tabsToRender = filterTabs(NAV_TABS, showNfc);
+  const menuTabs = showMaster ? [...tabsToRender, { href: '/dashboard/master', label: 'マスタ管理' }] : tabsToRender;
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -53,7 +55,7 @@ export default function AppHeader({ showNfc = true }: AppHeaderProps) {
         </button>
       </div>
       <div className="hidden sm:flex">
-        <NavTabs showNfc={showNfc} />
+        <NavTabs showNfc={showNfc} showMaster={showMaster} />
       </div>
       {isOpen && (
         <div className="sm:hidden">
@@ -63,7 +65,7 @@ export default function AppHeader({ showNfc = true }: AppHeaderProps) {
             aria-label="主要タブナビゲーション"
             className="flex flex-col gap-1 rounded-lg border border-brand-border bg-brand-surface-alt p-2 text-sm font-medium"
           >
-            {tabsToRender.map((tab) => {
+            {menuTabs.map((tab) => {
               const active = isActivePath(pathname, tab.href);
               return (
                 <Link
