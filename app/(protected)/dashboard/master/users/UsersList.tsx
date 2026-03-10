@@ -1,7 +1,29 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { MasterUser } from '@/types/master';
+
+type UserForm = {
+  username: string;
+  name: string;
+  phone: string;
+  email: string;
+  role: 'admin' | 'user';
+  active: boolean;
+  excludeBreakDeduction: boolean;
+  password: string;
+};
+
+const EMPTY_FORM: UserForm = {
+  username: '',
+  name: '',
+  phone: '',
+  email: '',
+  role: 'user',
+  active: true,
+  excludeBreakDeduction: false,
+  password: '',
+};
 
 function formatDate(value: string | null) {
   if (!value) return '-';
@@ -10,88 +32,184 @@ function formatDate(value: string | null) {
   return date.toLocaleString('ja-JP');
 }
 
+function parseError(code?: string) {
+  if (code === 'USERNAME_EXISTS') return 'ログインIDが重複しています。';
+  if (code === 'INVALID_BODY') return '入力内容を確認してください。';
+  return '保存に失敗しました。';
+}
+
 export default function UsersList() {
   const [items, setItems] = useState<MasterUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [submitError, setSubmitError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<UserForm>(EMPTY_FORM);
+
+  const modeLabel = useMemo(() => (editingId ? '編集' : '新規登録'), [editingId]);
+
+  const fetchData = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await fetch('/api/master/users', { cache: 'no-store', credentials: 'same-origin' });
+      if (!response.ok) throw new Error('FAILED');
+      const data = (await response.json()) as MasterUser[];
+      setItems(data);
+    } catch {
+      setError('ユーザー一覧の取得に失敗しました。');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let active = true;
-
-    const fetchData = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const response = await fetch('/api/master/users', { cache: 'no-store', credentials: 'same-origin' });
-        if (!response.ok) throw new Error('FAILED');
-        const data = (await response.json()) as MasterUser[];
-        if (!active) return;
-        setItems(data);
-      } catch {
-        if (!active) return;
-        setError('ユーザー一覧の取得に失敗しました。');
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-
     fetchData();
-    return () => {
-      active = false;
-    };
   }, []);
 
-  if (loading) return <p className="text-sm text-brand-muted">読み込み中...</p>;
-  if (error) return <p className="text-sm text-red-600">{error}</p>;
-  if (!items.length) return <div className="rounded border border-dashed border-brand-border px-6 py-10 text-center text-sm text-brand-muted">データがありません。</div>;
+  const onEdit = (item: MasterUser) => {
+    setEditingId(item.id);
+    setSubmitError('');
+    setForm({
+      username: item.username,
+      name: item.name,
+      phone: item.phone ?? '',
+      email: item.email ?? '',
+      role: item.role,
+      active: item.active,
+      excludeBreakDeduction: item.excludeBreakDeduction,
+      password: '',
+    });
+  };
+
+  const onReset = () => {
+    setEditingId(null);
+    setSubmitError('');
+    setForm(EMPTY_FORM);
+  };
+
+  const onSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    setSubmitError('');
+
+    const payload = {
+      username: form.username,
+      name: form.name,
+      phone: form.phone,
+      email: form.email,
+      role: form.role,
+      active: form.active,
+      excludeBreakDeduction: form.excludeBreakDeduction,
+      ...(editingId ? {} : { password: form.password }),
+    };
+
+    const endpoint = editingId ? `/api/master/users/${editingId}` : '/api/master/users';
+    const method = editingId ? 'PATCH' : 'POST';
+
+    try {
+      const response = await fetch(endpoint, {
+        method,
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(parseError(body.error));
+      }
+
+      onReset();
+      await fetchData();
+    } catch (requestError) {
+      setSubmitError(requestError instanceof Error ? requestError.message : '保存に失敗しました。');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onToggle = async (item: MasterUser) => {
+    setSaving(true);
+    setSubmitError('');
+    try {
+      const response = await fetch(`/api/master/users/${item.id}`, {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: !item.active }),
+      });
+      if (!response.ok) throw new Error('状態更新に失敗しました。');
+      await fetchData();
+    } catch (requestError) {
+      setSubmitError(requestError instanceof Error ? requestError.message : '状態更新に失敗しました。');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <>
-      <div className="space-y-3 md:hidden">
-        {items.map((item) => (
-          <article key={item.id} className="rounded-lg border border-brand-border bg-brand-surface p-3 text-sm text-brand-text">
-            <p className="font-medium">{item.name}</p>
-            <p>権限: {item.role}</p>
-            <p>有効: {item.active ? '有効' : '無効'}</p>
-            <p>休憩控除除外: {item.excludeBreakDeduction ? '対象外' : '対象'}</p>
-          </article>
-        ))}
-      </div>
+    <div className="space-y-4">
+      <form onSubmit={onSubmit} className="space-y-3 rounded-lg border border-brand-border bg-brand-surface p-4 text-sm text-brand-text">
+        <div className="flex items-center justify-between"><h2 className="text-base font-semibold">{modeLabel}</h2><button type="button" onClick={onReset} className="rounded border border-brand-border px-2 py-1">入力クリア</button></div>
+        <div className="grid gap-3 md:grid-cols-2">
+          
+          <label className="space-y-1"><span>ログインID</span><input required className="w-full rounded border border-brand-border px-2 py-1" value={form.username} onChange={(e) => setForm((prev) => ({ ...prev, username: e.target.value }))} /></label>
+          <label className="space-y-1"><span>氏名</span><input required className="w-full rounded border border-brand-border px-2 py-1" value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} /></label>
+          <label className="space-y-1"><span>電話番号</span><input className="w-full rounded border border-brand-border px-2 py-1" value={form.phone} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))} /></label>
+          <label className="space-y-1"><span>メール</span><input type="email" className="w-full rounded border border-brand-border px-2 py-1" value={form.email} onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))} /></label>
+          <label className="space-y-1"><span>権限</span><select className="w-full rounded border border-brand-border px-2 py-1" value={form.role} onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value as 'admin' | 'user' }))}><option value="admin">admin</option><option value="user">user</option></select></label>
+          {!editingId ? <label className="space-y-1"><span>パスワード</span><input required type="password" className="w-full rounded border border-brand-border px-2 py-1" value={form.password} onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))} /></label> : null}
+          <label className="flex items-center gap-2 pt-6"><input type="checkbox" checked={form.active} onChange={(e) => setForm((prev) => ({ ...prev, active: e.target.checked }))} /><span>有効</span></label>
+          <label className="flex items-center gap-2 pt-6"><input type="checkbox" checked={form.excludeBreakDeduction} onChange={(e) => setForm((prev) => ({ ...prev, excludeBreakDeduction: e.target.checked }))} /><span>休憩控除除外</span></label>
+        </div>
+        {submitError ? <p className="text-red-600">{submitError}</p> : null}
+        <p className="text-xs text-brand-muted">入力後は「登録」ボタンを押してください。</p>
+        <div className="flex gap-2">
+          <button disabled={saving} className="rounded border border-black bg-white px-3 py-1.5 text-black disabled:opacity-60">{editingId ? '更新' : '登録'}</button>
+          <button type="button" onClick={onReset} className="rounded border border-brand-border px-3 py-1.5">キャンセル</button>
+        </div>
+      </form>
 
-      <div className="hidden overflow-x-auto rounded-lg border border-brand-border md:block">
-        <table className="min-w-full divide-y divide-brand-border text-sm text-brand-text">
-          <thead className="bg-brand-surface-alt text-left">
-            <tr>
-              <th className="px-3 py-2">ユーザーコード</th>
-              <th className="px-3 py-2">ユーザー名</th>
-              <th className="px-3 py-2">氏名</th>
-              <th className="px-3 py-2">電話番号</th>
-              <th className="px-3 py-2">メール</th>
-              <th className="px-3 py-2">権限</th>
-              <th className="px-3 py-2">有効</th>
-              <th className="px-3 py-2">休憩控除除外</th>
-              <th className="px-3 py-2">作成日時</th>
-              <th className="px-3 py-2">更新日時</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-brand-border bg-brand-surface">
-            {items.map((item) => (
-              <tr key={item.id}>
-                <td className="px-3 py-2">{item.userCode ?? '-'}</td>
-                <td className="px-3 py-2">{item.username}</td>
-                <td className="px-3 py-2">{item.name}</td>
-                <td className="px-3 py-2">{item.phone ?? '-'}</td>
-                <td className="px-3 py-2">{item.email ?? '-'}</td>
-                <td className="px-3 py-2">{item.role}</td>
-                <td className="px-3 py-2">{item.active ? '有効' : '無効'}</td>
-                <td className="px-3 py-2">{item.excludeBreakDeduction ? '対象外' : '対象'}</td>
-                <td className="px-3 py-2">{formatDate(item.createdAt)}</td>
-                <td className="px-3 py-2">{formatDate(item.updatedAt)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
+      {loading ? <p className="text-sm text-brand-muted">読み込み中...</p> : null}
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {!loading && !error && !items.length ? (
+        <div className="rounded border border-dashed border-brand-border px-6 py-10 text-center text-sm text-brand-muted">データがありません。</div>
+      ) : null}
+
+      {!!items.length && (
+        <div className="space-y-3 md:hidden">
+          {items.map((item) => (
+            <article key={item.id} className="rounded-lg border border-brand-border bg-brand-surface p-3 text-sm text-brand-text">
+              <p className="font-medium">{item.name}</p>
+              <p>ログインID: {item.username}</p>
+              <p>権限: {item.role}</p>
+              <p>有効: {item.active ? '有効' : '無効'}</p>
+              <div className="mt-2 flex gap-2">
+                <button type="button" onClick={() => onEdit(item)} className="rounded border border-brand-border px-2 py-1">編集</button>
+                <button type="button" onClick={() => onToggle(item)} className="rounded border border-brand-border px-2 py-1">{item.active ? '無効化' : '有効化'}</button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+
+      {!!items.length && (
+        <div className="hidden overflow-x-auto rounded-lg border border-brand-border md:block">
+          <table className="min-w-full divide-y divide-brand-border text-sm text-brand-text">
+            <thead className="bg-brand-surface-alt text-left"><tr><th className="px-3 py-2">ログインID</th><th className="px-3 py-2">氏名</th><th className="px-3 py-2">電話番号</th><th className="px-3 py-2">メール</th><th className="px-3 py-2">権限</th><th className="px-3 py-2">有効</th><th className="px-3 py-2">休憩控除除外</th><th className="px-3 py-2">作成日時</th><th className="px-3 py-2">更新日時</th><th className="px-3 py-2">操作</th></tr></thead>
+            <tbody className="divide-y divide-brand-border bg-brand-surface">
+              {items.map((item) => (
+                <tr key={item.id}>
+                  <td className="px-3 py-2">{item.username}</td><td className="px-3 py-2">{item.name}</td><td className="px-3 py-2">{item.phone ?? '-'}</td><td className="px-3 py-2">{item.email ?? '-'}</td><td className="px-3 py-2">{item.role}</td><td className="px-3 py-2">{item.active ? '有効' : '無効'}</td><td className="px-3 py-2">{item.excludeBreakDeduction ? '対象外' : '対象'}</td><td className="px-3 py-2">{formatDate(item.createdAt)}</td><td className="px-3 py-2">{formatDate(item.updatedAt)}</td>
+                  <td className="px-3 py-2"><div className="flex gap-2"><button type="button" onClick={() => onEdit(item)} className="rounded border border-brand-border px-2 py-1">編集</button><button type="button" onClick={() => onToggle(item)} className="rounded border border-brand-border px-2 py-1">{item.active ? '無効化' : '有効化'}</button></div></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
