@@ -32,7 +32,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const q = (url.searchParams.get('q') ?? '').trim();
-  const categoryId = url.searchParams.get('categoryId') ?? '';
+  const categoryId = (url.searchParams.get('categoryId') ?? '').trim();
   const locationId = url.searchParams.get('locationId') ?? '';
 
   const params: unknown[] = [];
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
           i.sku,
           i.name,
           i.description,
-          i.category_id::text AS "categoryId",
+          i.category_id AS "categoryId",
           i.location_id::text AS "locationId",
           i.quantity,
           i.unit,
@@ -70,10 +70,10 @@ export async function GET(request: Request) {
           i.is_active AS "isActive",
           i.created_at::text AS "createdAt",
           i.updated_at::text AS "updatedAt",
-          c.name AS "categoryName",
+          COALESCE(m.name, i.category_id) AS "categoryName",
           l.name AS "locationName"
         FROM inventory.items i
-        JOIN inventory.categories c ON c.id = i.category_id
+        LEFT JOIN machines m ON m.machine_code::text = i.category_id
         JOIN inventory.locations l ON l.id = i.location_id
         ${whereClause}
         ORDER BY i.name ASC
@@ -122,7 +122,7 @@ export async function POST(request: Request) {
           image_path,
           is_active
         ) VALUES (
-          $1, $2, $3, $4::uuid, $5::uuid, $6, $7, $8, $9, $10
+          $1, $2, $3, $4, $5::uuid, $6, $7, $8, $9, $10
         )
         RETURNING id::text AS id
       `,

@@ -48,7 +48,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
           i.sku,
           i.name,
           i.description,
-          i.category_id::text AS "categoryId",
+          i.category_id AS "categoryId",
           i.location_id::text AS "locationId",
           i.quantity,
           i.unit,
@@ -57,10 +57,10 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
           i.is_active AS "isActive",
           i.created_at::text AS "createdAt",
           i.updated_at::text AS "updatedAt",
-          c.name AS "categoryName",
+          COALESCE(m.name, i.category_id) AS "categoryName",
           l.name AS "locationName"
         FROM inventory.items i
-        JOIN inventory.categories c ON c.id = i.category_id
+        LEFT JOIN machines m ON m.machine_code::text = i.category_id
         JOIN inventory.locations l ON l.id = i.location_id
         WHERE i.id = $1
         LIMIT 1
@@ -142,6 +142,38 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         RETURNING id::text AS id
       `,
       params,
+    );
+
+    if (!result.rows[0]) {
+      return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
+    }
+
+    return NextResponse.json({ id: result.rows[0].id });
+  } catch {
+    return NextResponse.json({ error: 'DB_WRITE_FAILED' }, { status: 500 });
+  }
+}
+
+export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  }
+
+  const routeParams = await context.params;
+  const parsedParams = paramsSchema.safeParse(routeParams);
+  if (!parsedParams.success) {
+    return NextResponse.json({ error: 'INVALID_ID' }, { status: 400 });
+  }
+
+  try {
+    const result = await inventoryQuery<{ id: string }>(
+      `
+        DELETE FROM inventory.items
+        WHERE id = $1::uuid
+        RETURNING id::text AS id
+      `,
+      [parsedParams.data.id],
     );
 
     if (!result.rows[0]) {
