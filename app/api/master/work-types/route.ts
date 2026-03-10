@@ -78,7 +78,7 @@ export async function POST(request: Request) {
         RETURNING
           ${workTypeSelectSql}
       `,
-      [payload.workCode, payload.name, payload.sortOrder, payload.active, payload.category],
+      [payload.workCode || null, payload.name, payload.sortOrder, payload.active, payload.category],
     );
 
     return NextResponse.json(result.rows[0], { status: 201 });

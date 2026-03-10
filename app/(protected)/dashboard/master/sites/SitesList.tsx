@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { MasterSite } from '@/types/master';
 
 type SiteForm = {
-  siteCode: string;
   name: string;
   clientName: string;
   longitude: string;
@@ -15,7 +14,6 @@ type SiteForm = {
 };
 
 const EMPTY_FORM: SiteForm = {
-  siteCode: '',
   name: '',
   clientName: '',
   longitude: '',
@@ -71,7 +69,6 @@ export default function SitesList() {
     setEditingId(item.id);
     setSubmitError('');
     setForm({
-      siteCode: item.siteCode ?? '',
       name: item.name ?? '',
       clientName: item.clientName ?? '',
       longitude: item.longitude?.toString() ?? '',
@@ -94,7 +91,6 @@ export default function SitesList() {
     setSubmitError('');
 
     const payload = {
-      siteCode: form.siteCode,
       name: form.name,
       clientName: form.clientName,
       longitude: Number(form.longitude),
@@ -155,10 +151,7 @@ export default function SitesList() {
       <form onSubmit={onSubmit} className="space-y-3 rounded-lg border border-brand-border bg-brand-surface p-4 text-sm text-brand-text">
         <div className="flex items-center justify-between"><h2 className="text-base font-semibold">{modeLabel}</h2><button type="button" onClick={onReset} className="rounded border border-brand-border px-2 py-1">新規登録</button></div>
         <div className="grid gap-3 md:grid-cols-2">
-          <label className="space-y-1">
-            <span>現場コード</span>
-            <input className="w-full rounded border border-brand-border px-2 py-1" value={form.siteCode} onChange={(e) => setForm((prev) => ({ ...prev, siteCode: e.target.value }))} />
-          </label>
+          
           <label className="space-y-1">
             <span>現場名</span>
             <input required className="w-full rounded border border-brand-border px-2 py-1" value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} />
@@ -200,6 +193,24 @@ export default function SitesList() {
       {!loading && !error && !items.length ? (
         <div className="rounded border border-dashed border-brand-border px-6 py-10 text-center text-sm text-brand-muted">データがありません。</div>
       ) : null}
+
+
+      {!!items.length && (
+        <div className="space-y-3 md:hidden">
+          {items.map((item) => (
+            <article key={item.id} className="rounded-lg border border-brand-border bg-brand-surface p-3 text-sm text-brand-text">
+              <p className="font-medium">{item.name ?? '-'}</p>
+              <p>元請名: {item.clientName ?? '-'}</p>
+              <p>有効: {item.active ? '有効' : '無効'}</p>
+              <p>半径(m): {item.radiusM ?? '-'}</p>
+              <div className="mt-2 flex gap-2">
+                <button type="button" onClick={() => onEdit(item)} className="rounded border border-brand-border px-2 py-1">編集</button>
+                <button type="button" onClick={() => onToggle(item)} className="rounded border border-brand-border px-2 py-1">{item.active ? '無効化' : '有効化'}</button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
 
       {!!items.length && (
         <div className="hidden overflow-x-auto rounded-lg border border-brand-border md:block">

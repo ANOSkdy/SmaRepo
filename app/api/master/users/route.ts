@@ -88,7 +88,7 @@ export async function POST(request: Request) {
           ${userSelectSql}
       `,
       [
-        payload.userCode,
+        payload.userCode || null,
         payload.username,
         payload.name,
         payload.phone,

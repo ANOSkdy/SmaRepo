@@ -27,7 +27,7 @@ export const masterSiteUpdateSchema = masterSiteCreateSchema
   .refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' });
 
 export const masterUserCreateSchema = z.object({
-  userCode: z.string().trim().min(1),
+  userCode: z.string().trim().optional().default(''),
   username: z.string().trim().min(1),
   name: z.string().trim().min(1),
   phone: nullableText,
@@ -65,7 +65,7 @@ export const masterUserUpdateSchema = z
   .refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' });
 
 export const masterWorkTypeCreateSchema = z.object({
-  workCode: z.string().trim().min(1),
+  workCode: z.string().trim().optional().default(''),
   name: z.string().trim().min(1),
   sortOrder: z.number().int().min(0),
   active: z.boolean().default(true),
