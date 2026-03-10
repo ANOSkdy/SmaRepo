@@ -39,7 +39,7 @@ export const masterUserCreateSchema = z.object({
   role: roleSchema,
   active: z.boolean().default(true),
   excludeBreakDeduction: z.boolean().default(false),
-  password: z.string().min(8),
+  password: z.string().min(1),
 });
 
 export const masterUserUpdateSchema = z
