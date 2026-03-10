@@ -172,9 +172,6 @@ export default function InventoryPage() {
           <Link href="/inventory/new" className="rounded border border-brand-border px-3 py-1.5 text-brand-text hover:bg-brand-surface-alt">
             新規登録
           </Link>
-          <Link href="/inventory/categories" className="rounded border border-brand-border px-3 py-1.5 text-brand-text hover:bg-brand-surface-alt">
-            カテゴリ管理
-          </Link>
           <Link href="/inventory/locations" className="rounded border border-brand-border px-3 py-1.5 text-brand-text hover:bg-brand-surface-alt">
             保管場所管理
           </Link>
