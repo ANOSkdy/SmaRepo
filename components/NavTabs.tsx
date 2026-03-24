@@ -10,6 +10,7 @@ const NAV_TABS = [
   { href: '/dashboard', label: 'カレンダー' },
   { href: '/reports', label: '稼働集計' },
   { href: '/inventory', label: '在庫一覧' },
+  { href: '/qa', label: 'ヘルプ / QA' },
   { href: `/nfc?machineId=${DEFAULT_MACHINE_ID}`, label: '打刻ページ' },
 ] as const;
 

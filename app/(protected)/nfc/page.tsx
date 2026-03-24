@@ -1,4 +1,5 @@
 // app/(protected)/nfc/page.tsx
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { hasDatabaseUrl } from "@/lib/server-env";
@@ -122,7 +123,15 @@ export default async function NFCPage({ searchParams }: NFCPageProps) {
 
   return (
     <section className="flex flex-1 flex-col">
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 space-y-6">
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 space-y-4">
+        <div className="flex items-center justify-end">
+          <Link
+            href="/qa"
+            className="inline-flex items-center rounded-full border border-brand-border bg-brand-surface-alt px-3 py-1.5 text-xs font-medium text-brand-primary transition hover:bg-brand-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-focus/40"
+          >
+            ❓ ガイド・困ったとき
+          </Link>
+        </div>
         <div className="flex flex-1 items-center justify-center">
           <StampCard
             initialStampType={initialViewState.initialStampType}
