@@ -1,7 +1,5 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-
 type QASection = 'guide' | 'troubleshooting';
 
 type QAItem = {
@@ -148,56 +146,6 @@ const QA_ITEMS: QAItem[] = [
   },
 ];
 
-function toHiragana(input: string): string {
-  return input.replace(/[\u30A1-\u30F6]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0x60));
-}
-
-function normalizeText(input: string): string {
-  return toHiragana(input).toLowerCase().normalize('NFKC').replace(/\s+/g, ' ').trim();
-}
-
-function calcScore(query: string, item: QAItem): number {
-  if (!query) return 1;
-
-  const q = normalizeText(query);
-  const tokens = q.split(' ').filter(Boolean);
-  const searchable = normalizeText([
-    item.title,
-    item.summary,
-    item.category,
-    ...item.keywords,
-    item.symptom ?? '',
-    item.cause ?? '',
-    item.steps.join(' '),
-  ].join(' '));
-
-  let score = 0;
-
-  if (searchable.includes(q)) score += 12;
-
-  for (const token of tokens) {
-    if (searchable.includes(token)) {
-      score += 5;
-      continue;
-    }
-
-    const fuzzyHit = item.keywords.some((keyword) => {
-      const normalizedKeyword = normalizeText(keyword);
-      if (!normalizedKeyword) return false;
-      return normalizedKeyword.includes(token) || token.includes(normalizedKeyword);
-    });
-
-    if (fuzzyHit) {
-      score += 2;
-    }
-  }
-
-  const titleNormalized = normalizeText(item.title);
-  if (titleNormalized.includes(q)) score += 4;
-
-  return score;
-}
-
 function CategoryBadge({ category }: { category: string }) {
   return <span className="rounded-full bg-brand-primary/10 px-2 py-1 text-xs font-semibold text-brand-primary">{category}</span>;
 }
@@ -206,39 +154,66 @@ function SectionIcon({ section }: { section: QASection }) {
   return <span aria-hidden="true">{section === 'guide' ? '📘' : '🛠️'}</span>;
 }
 
+function QAAccordionItem({ item }: { item: QAItem }) {
+  return (
+    <details className="group rounded-lg border border-brand-border bg-brand-surface-alt">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <CategoryBadge category={item.category} />
+            {item.badge ? <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">{item.badge}</span> : null}
+          </div>
+          <p className="mt-2 text-base font-semibold text-brand-text">{item.title}</p>
+          <p className="mt-1 text-sm text-brand-text">{item.summary}</p>
+        </div>
+        <span className="shrink-0 text-brand-primary transition group-open:rotate-180" aria-hidden="true">▾</span>
+      </summary>
+
+      <div className="border-t border-brand-border px-4 pb-4 pt-3">
+        {item.symptom ? <p className="text-sm text-brand-text"><span className="font-semibold">見える症状:</span> {item.symptom}</p> : null}
+        {item.cause ? <p className="mt-1 text-sm text-brand-text"><span className="font-semibold">よくある原因:</span> {item.cause}</p> : null}
+
+        {item.checkFirst?.length ? (
+          <div className="mt-3">
+            <p className="text-sm font-semibold text-brand-text">まず確認</p>
+            <ul className="mt-1 list-inside list-disc space-y-1 text-sm text-brand-text">
+              {item.checkFirst.map((point) => (
+                <li key={point}>{point}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        <div className="mt-3">
+          <p className="text-sm font-semibold text-brand-text">対処手順</p>
+          <ol className="mt-1 list-inside list-decimal space-y-1 text-sm text-brand-text">
+            {item.steps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+        </div>
+
+        {item.section === 'guide' ? (
+          <p className="mt-3 rounded-md bg-brand-primary/5 p-2 text-sm text-brand-text">💡 {item.contactHint}</p>
+        ) : (
+          <p className="mt-3 rounded-md bg-brand-primary/5 p-2 text-sm text-brand-text">✅ 解決しないとき: {item.contactHint}</p>
+        )}
+      </div>
+    </details>
+  );
+}
+
 export default function QAPageClient() {
-  const [query, setQuery] = useState('');
-
-  const filtered = useMemo(() => {
-    return QA_ITEMS.map((item) => ({ item, score: calcScore(query, item) }))
-      .filter(({ score }) => score > 0)
-      .sort((a, b) => b.score - a.score || a.item.title.localeCompare(b.item.title, 'ja'));
-  }, [query]);
-
-  const guideItems = filtered.filter(({ item }) => item.section === 'guide');
-  const troubleItems = filtered.filter(({ item }) => item.section === 'troubleshooting');
+  const guideItems = QA_ITEMS.filter((item) => item.section === 'guide');
+  const troubleItems = QA_ITEMS.filter((item) => item.section === 'troubleshooting');
 
   return (
     <section className="mx-auto flex w-full max-w-4xl flex-col gap-6">
       <div className="rounded-xl border border-brand-border bg-brand-surface-alt p-4 sm:p-6">
         <h1 className="text-2xl font-bold text-brand-primary">ヘルプ / QA</h1>
         <p className="mt-2 text-sm text-brand-text">
-          使い方の確認や、困ったときの対処をまとめています。あいまいな言葉でも検索できます。
+          使い方の確認や、困ったときの対処をまとめています。項目をタップすると詳細を開けます。
         </p>
-        <div className="mt-4">
-          <label htmlFor="qa-search" className="mb-2 block text-sm font-medium text-brand-text">
-            キーワードで探す（例: 位置情報 / 打刻しても反応しません / レポートが見つからない）
-          </label>
-          <input
-            id="qa-search"
-            name="qa-search"
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="困っている内容を入力してください"
-            className="w-full rounded-lg border border-brand-border bg-brand-surface px-3 py-2 text-sm text-brand-text outline-none transition focus:border-brand-primary focus:ring-2 focus:ring-brand-focus/30"
-          />
-        </div>
       </div>
 
       <div className="rounded-xl border border-brand-border bg-brand-surface p-4 sm:p-6">
@@ -248,26 +223,9 @@ export default function QAPageClient() {
         </h2>
         <p className="mt-2 text-sm text-brand-text">日々の利用で迷いやすい操作をまとめました。</p>
         <div className="mt-4 grid gap-3">
-          {guideItems.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-brand-border p-4 text-sm text-brand-text">該当するガイドが見つかりませんでした。別の言葉でも試してみてください。</p>
-          ) : (
-            guideItems.map(({ item }) => (
-              <article key={item.id} className="rounded-lg border border-brand-border bg-brand-surface-alt p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <CategoryBadge category={item.category} />
-                  {item.badge ? <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">{item.badge}</span> : null}
-                </div>
-                <h3 className="mt-2 text-base font-semibold text-brand-text">{item.title}</h3>
-                <p className="mt-1 text-sm text-brand-text">{item.summary}</p>
-                <ol className="mt-3 list-inside list-decimal space-y-1 text-sm text-brand-text">
-                  {item.steps.map((step) => (
-                    <li key={step}>{step}</li>
-                  ))}
-                </ol>
-                <p className="mt-3 rounded-md bg-brand-primary/5 p-2 text-sm text-brand-text">💡 {item.contactHint}</p>
-              </article>
-            ))
-          )}
+          {guideItems.map((item) => (
+            <QAAccordionItem key={item.id} item={item} />
+          ))}
         </div>
       </div>
 
@@ -278,41 +236,9 @@ export default function QAPageClient() {
         </h2>
         <p className="mt-2 text-sm text-brand-text">「何が起きているか」から順番に確認できます。</p>
         <div className="mt-4 grid gap-3">
-          {troubleItems.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-brand-border p-4 text-sm text-brand-text">該当する対処が見つかりませんでした。短い言葉で再検索してください。</p>
-          ) : (
-            troubleItems.map(({ item }) => (
-              <article key={item.id} className="rounded-lg border border-brand-border bg-brand-surface-alt p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <CategoryBadge category={item.category} />
-                  {item.badge ? <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">{item.badge}</span> : null}
-                </div>
-                <h3 className="mt-2 text-base font-semibold text-brand-text">{item.title}</h3>
-                <p className="mt-1 text-sm text-brand-text">{item.summary}</p>
-                {item.symptom ? <p className="mt-3 text-sm text-brand-text"><span className="font-semibold">見える症状:</span> {item.symptom}</p> : null}
-                {item.cause ? <p className="mt-1 text-sm text-brand-text"><span className="font-semibold">よくある原因:</span> {item.cause}</p> : null}
-                {item.checkFirst?.length ? (
-                  <div className="mt-3">
-                    <p className="text-sm font-semibold text-brand-text">まず確認</p>
-                    <ul className="mt-1 list-inside list-disc space-y-1 text-sm text-brand-text">
-                      {item.checkFirst.map((point) => (
-                        <li key={point}>{point}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-                <div className="mt-3">
-                  <p className="text-sm font-semibold text-brand-text">対処手順</p>
-                  <ol className="mt-1 list-inside list-decimal space-y-1 text-sm text-brand-text">
-                    {item.steps.map((step) => (
-                      <li key={step}>{step}</li>
-                    ))}
-                  </ol>
-                </div>
-                <p className="mt-3 rounded-md bg-brand-primary/5 p-2 text-sm text-brand-text">✅ 解決しないとき: {item.contactHint}</p>
-              </article>
-            ))
-          )}
+          {troubleItems.map((item) => (
+            <QAAccordionItem key={item.id} item={item} />
+          ))}
         </div>
       </div>
     </section>
