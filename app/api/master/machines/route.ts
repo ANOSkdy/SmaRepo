@@ -1,0 +1,127 @@
+import { NextResponse } from 'next/server';
+import { query } from '@/lib/db';
+import { getAdminSession } from '@/lib/master/auth';
+import { masterMachineCreateSchema } from '@/lib/master/schemas';
+import type { MasterMachine } from '@/types/master';
+
+export const runtime = 'nodejs';
+
+type MachineRow = MasterMachine;
+
+type PgError = { code?: string; constraint?: string };
+
+const machineSelectSql = (codeColumn: 'machine_code' | 'machineid') => `
+  m.id::text AS id,
+  m.name,
+  m.${codeColumn} AS "machineCode",
+  m.active,
+  m.created_at::text AS "createdAt",
+  m.updated_at::text AS "updatedAt"
+`;
+
+function isMissingColumnError(error: unknown, columnName: string) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes(`column m.${columnName} does not exist`) || message.includes(`column "${columnName}" does not exist`);
+}
+
+function isUniqueViolation(error: unknown) {
+  const maybeError = error as PgError;
+  return maybeError?.code === '23505';
+}
+
+async function listMachinesWithColumn(codeColumn: 'machine_code' | 'machineid') {
+  return query<MachineRow>(
+    `
+      SELECT
+        ${machineSelectSql(codeColumn)}
+      FROM public.machines m
+      ORDER BY m.${codeColumn} ASC, m.name ASC
+    `,
+    [],
+  );
+}
+
+async function createMachineWithColumn(codeColumn: 'machine_code' | 'machineid', payload: { name: string; machineCode: number; active: boolean }) {
+  return query<MachineRow>(
+    `
+      INSERT INTO public.machines (
+        name,
+        ${codeColumn},
+        active
+      ) VALUES (
+        $1, $2, $3
+      )
+      RETURNING
+        ${machineSelectSql(codeColumn)}
+    `,
+    [payload.name, payload.machineCode, payload.active],
+  );
+}
+
+export async function GET() {
+  const adminSession = await getAdminSession();
+  if (!adminSession.ok) {
+    return NextResponse.json({ error: adminSession.reason }, { status: adminSession.reason === 'UNAUTHORIZED' ? 401 : 403 });
+  }
+
+  try {
+    const result = await listMachinesWithColumn('machine_code');
+    return NextResponse.json(result.rows as MasterMachine[]);
+  } catch (error) {
+    if (isMissingColumnError(error, 'machine_code')) {
+      try {
+        const fallbackResult = await listMachinesWithColumn('machineid');
+        return NextResponse.json(fallbackResult.rows as MasterMachine[]);
+      } catch {
+        return NextResponse.json({ error: 'DB_QUERY_FAILED' }, { status: 500 });
+      }
+    }
+
+    return NextResponse.json({ error: 'DB_QUERY_FAILED' }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  const adminSession = await getAdminSession();
+  if (!adminSession.ok) {
+    return NextResponse.json({ error: adminSession.reason }, { status: adminSession.reason === 'UNAUTHORIZED' ? 401 : 403 });
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'INVALID_JSON' }, { status: 400 });
+  }
+
+  const parsed = masterMachineCreateSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'INVALID_BODY' }, { status: 400 });
+  }
+
+  const payload = parsed.data;
+
+  try {
+    const result = await createMachineWithColumn('machine_code', payload);
+    return NextResponse.json(result.rows[0], { status: 201 });
+  } catch (error) {
+    if (isMissingColumnError(error, 'machine_code')) {
+      try {
+        const fallbackResult = await createMachineWithColumn('machineid', payload);
+        return NextResponse.json(fallbackResult.rows[0], { status: 201 });
+      } catch (fallbackError) {
+        if (isUniqueViolation(fallbackError)) {
+          return NextResponse.json({ error: 'MACHINE_CODE_EXISTS' }, { status: 409 });
+        }
+
+        return NextResponse.json({ error: 'DB_WRITE_FAILED' }, { status: 500 });
+      }
+    }
+
+    if (isUniqueViolation(error)) {
+      return NextResponse.json({ error: 'MACHINE_CODE_EXISTS' }, { status: 409 });
+    }
+
+    return NextResponse.json({ error: 'DB_WRITE_FAILED' }, { status: 500 });
+  }
+}

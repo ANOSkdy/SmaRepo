@@ -72,6 +72,17 @@ export const masterWorkTypeUpdateSchema = masterWorkTypeCreateSchema
   .partial()
   .refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' });
 
+
+export const masterMachineCreateSchema = z.object({
+  name: z.string().trim().min(1),
+  machineCode: z.number().int().min(1),
+  active: z.boolean().default(true),
+});
+
+export const masterMachineUpdateSchema = masterMachineCreateSchema
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' });
+
 export const masterIdSchema = z.object({
   id: z.string().uuid(),
 });
