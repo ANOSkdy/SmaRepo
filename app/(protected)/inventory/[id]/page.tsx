@@ -14,6 +14,7 @@ type InventoryDetailItem = {
   imageUrl: string | null;
   createdAt: string;
   updatedAt: string;
+  updatedByName: string | null;
   categoryName: string;
   locationName: string;
 };
@@ -171,6 +172,10 @@ export default function InventoryDetailPage() {
           <div>
             <dt className="text-brand-muted">更新日時</dt>
             <dd className="font-medium text-brand-text">{formatDateTime(item.updatedAt)}</dd>
+          </div>
+          <div>
+            <dt className="text-brand-muted">更新者</dt>
+            <dd className="font-medium text-brand-text">{item.updatedByName?.trim() ? item.updatedByName : '-'}</dd>
           </div>
         </dl>
       </section>

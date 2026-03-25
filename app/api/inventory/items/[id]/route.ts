@@ -9,6 +9,7 @@ export const runtime = 'nodejs';
 const paramsSchema = z.object({
   id: z.string().uuid(),
 });
+const updaterUserIdSchema = z.string().uuid();
 
 type InventoryItemDetailRow = {
   id: string;
@@ -24,6 +25,8 @@ type InventoryItemDetailRow = {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  updated_by_user_id: string | null;
+  updated_by_name: string | null;
   categoryName: string;
   locationName: string;
 };
@@ -74,12 +77,15 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
           i.is_active AS "isActive",
           i.created_at::text AS "createdAt",
           i.updated_at::text AS "updatedAt",
+          i.updated_by_user_id::text AS updated_by_user_id,
+          COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''), NULL) AS updated_by_name,
           COALESCE(m.machine_name, i.category_id) AS "categoryName",
           l.name AS "locationName"
         FROM inventory.items i
         LEFT JOIN machine_rows m ON m.machine_code = i.category_id
+        LEFT JOIN public.users u ON u.id = i.updated_by_user_id
         JOIN inventory.locations l ON l.id = i.location_id
-        WHERE i.id = $1
+        WHERE i.id = $1::uuid
         LIMIT 1
       `,
       [parsedParams.data.id],
@@ -90,7 +96,11 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
     }
 
-    return NextResponse.json(item);
+    return NextResponse.json({
+      ...item,
+      updatedByUserId: item.updated_by_user_id,
+      updatedByName: item.updated_by_name,
+    });
   } catch {
     return NextResponse.json({ error: 'DB_QUERY_FAILED' }, { status: 500 });
   }
@@ -99,6 +109,10 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) {
+    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  }
+  const updaterUserId = updaterUserIdSchema.safeParse(session.user.id);
+  if (!updaterUserId.success) {
     return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
   }
 
@@ -146,7 +160,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     return NextResponse.json({ error: 'NO_FIELDS_TO_UPDATE' }, { status: 400 });
   }
 
+  params.push(updaterUserId.data);
+  const updaterUserIdParamIndex = params.length;
   params.push(parsedParams.data.id);
+  const itemIdParamIndex = params.length;
 
   try {
     const result = await inventoryQuery<{ id: string }>(
@@ -154,8 +171,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         UPDATE inventory.items
         SET
           ${updates.join(', ')},
-          updated_at = NOW()
-        WHERE id = $${params.length}::uuid
+          updated_at = NOW(),
+          updated_by_user_id = $${updaterUserIdParamIndex}::uuid
+        WHERE id = $${itemIdParamIndex}::uuid
         RETURNING id::text AS id
       `,
       params,
