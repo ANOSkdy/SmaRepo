@@ -75,7 +75,7 @@ export const masterWorkTypeUpdateSchema = masterWorkTypeCreateSchema
 
 export const masterMachineCreateSchema = z.object({
   name: z.string().trim().min(1),
-  machineCode: z.number().int().min(1),
+  machineCode: z.string().trim().min(1),
   active: z.boolean().default(true),
 });
 

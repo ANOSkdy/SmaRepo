@@ -10,7 +10,7 @@ type MachineRow = MasterMachine;
 
 type MachineRefRow = {
   id: string;
-  machineCode: number;
+  machineCode: string;
 };
 
 type CountRow = {
@@ -43,7 +43,7 @@ function isForeignKeyViolation(error: unknown) {
   return maybeError?.code === '23503';
 }
 
-async function updateMachineWithColumn(codeColumn: 'machine_code' | 'machineid', id: string, payload: { name?: string; machineCode?: number; active?: boolean }) {
+async function updateMachineWithColumn(codeColumn: 'machine_code' | 'machineid', id: string, payload: { name?: string; machineCode?: string; active?: boolean }) {
   const updates: string[] = [];
   const params: unknown[] = [];
 
@@ -90,7 +90,7 @@ async function getMachineRefWithColumn(codeColumn: 'machine_code' | 'machineid',
   );
 }
 
-async function countInventoryReferences(machineCode: number) {
+async function countInventoryReferences(machineCode: string) {
   return query<CountRow>(
     `
       SELECT
@@ -103,7 +103,7 @@ async function countInventoryReferences(machineCode: number) {
           )
         END AS count
     `,
-    [String(machineCode)],
+    [machineCode],
   );
 }
 

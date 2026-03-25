@@ -9,6 +9,7 @@ export const runtime = 'nodejs';
 type MachineRow = MasterMachine;
 
 type PgError = { code?: string; constraint?: string };
+type MachineCreatePayload = { name: string; machineCode: string; active: boolean };
 
 const machineSelectSql = (codeColumn: 'machine_code' | 'machineid') => `
   m.id::text AS id,
@@ -62,7 +63,7 @@ async function resolveMachineCodeColumns() {
   return result.rows.map((row) => row.column_name).filter((name): name is 'machine_code' | 'machineid' => name === 'machine_code' || name === 'machineid');
 }
 
-async function createMachineWithAvailableColumns(payload: { name: string; machineCode: number; active: boolean }) {
+async function createMachineWithAvailableColumns(payload: MachineCreatePayload) {
   const codeColumns = await resolveMachineCodeColumns();
   if (codeColumns.length === 0) {
     throw new Error('MACHINE_CODE_COLUMN_MISSING');
@@ -134,6 +135,13 @@ export async function POST(request: Request) {
     const result = await createMachineWithAvailableColumns(payload);
     return NextResponse.json(result.rows[0], { status: 201 });
   } catch (error) {
+    const maybeError = error as PgError & { message?: string };
+    console.error('[master/machines:POST] DB write failed', {
+      code: maybeError?.code ?? null,
+      constraint: maybeError?.constraint ?? null,
+      message: maybeError?.message ?? 'unknown',
+    });
+
     if (isUniqueViolation(error)) {
       return NextResponse.json({ error: 'MACHINE_CODE_EXISTS' }, { status: 409 });
     }

@@ -82,7 +82,7 @@ export default function MachinesList() {
 
     const payload = {
       name: form.name,
-      machineCode: Number(form.machineCode),
+      machineCode: form.machineCode,
       active: form.active,
     };
 
@@ -144,7 +144,7 @@ export default function MachinesList() {
         <div className="flex items-center justify-between"><h2 className="text-base font-semibold">{modeLabel}</h2><button type="button" onClick={onReset} className="rounded border border-brand-border px-2 py-1">入力クリア</button></div>
         <div className="grid gap-3 md:grid-cols-2">
           <label className="space-y-1"><span>機械名</span><input required className="w-full rounded border border-brand-border px-2 py-1" value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} /></label>
-          <label className="space-y-1"><span>機械番号</span><input required type="number" min={1} className="w-full rounded border border-brand-border px-2 py-1" value={form.machineCode} onChange={(e) => setForm((prev) => ({ ...prev, machineCode: e.target.value }))} /></label>
+          <label className="space-y-1"><span>機械番号</span><input required inputMode="numeric" pattern="[0-9]+" className="w-full rounded border border-brand-border px-2 py-1" value={form.machineCode} onChange={(e) => setForm((prev) => ({ ...prev, machineCode: e.target.value }))} /></label>
           <label className="flex items-center gap-2 pt-6"><input type="checkbox" checked={form.active} onChange={(e) => setForm((prev) => ({ ...prev, active: e.target.checked }))} /><span>有効</span></label>
         </div>
         {submitError ? <p className="text-red-600">{submitError}</p> : null}

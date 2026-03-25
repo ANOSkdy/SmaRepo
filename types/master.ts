@@ -37,7 +37,7 @@ export type MasterWorkType = {
 export type MasterMachine = {
   id: string;
   name: string;
-  machineCode: number;
+  machineCode: string;
   active: boolean;
   createdAt: string | null;
   updatedAt: string | null;
