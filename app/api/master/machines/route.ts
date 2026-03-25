@@ -42,49 +42,27 @@ async function listMachinesWithColumn(codeColumn: 'machine_code' | 'machineid') 
   );
 }
 
-async function resolveMachineCodeColumns() {
-  const result = await query<{ column_name: string }>(
-    `
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-        AND table_name = 'machines'
-        AND column_name IN ('machine_code', 'machineid')
-      ORDER BY
-        CASE column_name
-          WHEN 'machine_code' THEN 1
-          WHEN 'machineid' THEN 2
-          ELSE 99
-        END
-    `,
-    [],
-  );
-
-  return result.rows.map((row) => row.column_name).filter((name): name is 'machine_code' | 'machineid' => name === 'machine_code' || name === 'machineid');
-}
-
-async function createMachineWithAvailableColumns(payload: MachineCreatePayload) {
-  const codeColumns = await resolveMachineCodeColumns();
-  if (codeColumns.length === 0) {
-    throw new Error('MACHINE_CODE_COLUMN_MISSING');
-  }
-
-  const insertColumns = ['name', ...codeColumns, 'active'];
-  const params: unknown[] = [payload.name, ...codeColumns.map(() => payload.machineCode), payload.active];
-  const placeholders = params.map((_, index) => `$${index + 1}`);
-  const primaryCodeColumn = codeColumns[0] ?? 'machine_code';
-
+async function createMachine(payload: MachineCreatePayload) {
   return query<MachineRow>(
     `
       INSERT INTO public.machines (
-        ${insertColumns.join(', ')}
+        name,
+        machine_code,
+        active,
+        rate,
+        rate_unit
       ) VALUES (
-        ${placeholders.join(', ')}
+        $1, $2, $3, $4, $5
       )
       RETURNING
-        ${machineSelectSql(primaryCodeColumn)}
+        id::text AS id,
+        name,
+        machine_code::text AS "machineCode",
+        active,
+        created_at::text AS "createdAt",
+        updated_at::text AS "updatedAt"
     `,
-    params,
+    [payload.name, payload.machineCode, payload.active, null, null],
   );
 }
 
@@ -132,7 +110,7 @@ export async function POST(request: Request) {
   const payload = parsed.data;
 
   try {
-    const result = await createMachineWithAvailableColumns(payload);
+    const result = await createMachine(payload);
     return NextResponse.json(result.rows[0], { status: 201 });
   } catch (error) {
     const maybeError = error as PgError & { message?: string };
