@@ -9,6 +9,7 @@ const paramsSchema = z.object({ id: z.string().uuid() });
 const bodySchema = z.object({
   amount: z.coerce.number().int().min(1).max(9999).default(1),
 });
+const updaterUserIdSchema = z.string().uuid();
 
 export async function POST(
   request: Request,
@@ -16,6 +17,10 @@ export async function POST(
 ) {
   const session = await auth();
   if (!session?.user) {
+    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  }
+  const updaterUserId = updaterUserIdSchema.safeParse(session.user.id);
+  if (!updaterUserId.success) {
     return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
   }
 
@@ -41,11 +46,11 @@ export async function POST(
     const result = await inventoryQuery<{ id: string; quantity: number }>(
       `
         UPDATE inventory.items
-        SET quantity = quantity + $2, updated_at = NOW()
+        SET quantity = quantity + $2, updated_at = NOW(), updated_by_user_id = $3::uuid
         WHERE id = $1::uuid AND is_active = TRUE
         RETURNING id::text AS id, quantity
       `,
-      [parsedParams.data.id, parsedBody.data.amount]
+      [parsedParams.data.id, parsedBody.data.amount, updaterUserId.data]
     );
 
     const row = result.rows[0];
