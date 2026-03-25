@@ -41,20 +41,49 @@ async function listMachinesWithColumn(codeColumn: 'machine_code' | 'machineid') 
   );
 }
 
-async function createMachineWithColumn(codeColumn: 'machine_code' | 'machineid', payload: { name: string; machineCode: number; active: boolean }) {
+async function resolveMachineCodeColumns() {
+  const result = await query<{ column_name: string }>(
+    `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'machines'
+        AND column_name IN ('machine_code', 'machineid')
+      ORDER BY
+        CASE column_name
+          WHEN 'machine_code' THEN 1
+          WHEN 'machineid' THEN 2
+          ELSE 99
+        END
+    `,
+    [],
+  );
+
+  return result.rows.map((row) => row.column_name).filter((name): name is 'machine_code' | 'machineid' => name === 'machine_code' || name === 'machineid');
+}
+
+async function createMachineWithAvailableColumns(payload: { name: string; machineCode: number; active: boolean }) {
+  const codeColumns = await resolveMachineCodeColumns();
+  if (codeColumns.length === 0) {
+    throw new Error('MACHINE_CODE_COLUMN_MISSING');
+  }
+
+  const insertColumns = ['name', ...codeColumns, 'active'];
+  const params: unknown[] = [payload.name, ...codeColumns.map(() => payload.machineCode), payload.active];
+  const placeholders = params.map((_, index) => `$${index + 1}`);
+  const primaryCodeColumn = codeColumns[0] ?? 'machine_code';
+
   return query<MachineRow>(
     `
       INSERT INTO public.machines (
-        name,
-        ${codeColumn},
-        active
+        ${insertColumns.join(', ')}
       ) VALUES (
-        $1, $2, $3
+        ${placeholders.join(', ')}
       )
       RETURNING
-        ${machineSelectSql(codeColumn)}
+        ${machineSelectSql(primaryCodeColumn)}
     `,
-    [payload.name, payload.machineCode, payload.active],
+    params,
   );
 }
 
@@ -102,22 +131,9 @@ export async function POST(request: Request) {
   const payload = parsed.data;
 
   try {
-    const result = await createMachineWithColumn('machine_code', payload);
+    const result = await createMachineWithAvailableColumns(payload);
     return NextResponse.json(result.rows[0], { status: 201 });
   } catch (error) {
-    if (isMissingColumnError(error, 'machine_code')) {
-      try {
-        const fallbackResult = await createMachineWithColumn('machineid', payload);
-        return NextResponse.json(fallbackResult.rows[0], { status: 201 });
-      } catch (fallbackError) {
-        if (isUniqueViolation(fallbackError)) {
-          return NextResponse.json({ error: 'MACHINE_CODE_EXISTS' }, { status: 409 });
-        }
-
-        return NextResponse.json({ error: 'DB_WRITE_FAILED' }, { status: 500 });
-      }
-    }
-
     if (isUniqueViolation(error)) {
       return NextResponse.json({ error: 'MACHINE_CODE_EXISTS' }, { status: 409 });
     }
