@@ -46,7 +46,7 @@ export default function InventoryPage() {
   const [locations, setLocations] = useState<InventoryLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [carryingId, setCarryingId] = useState<string>('');
+  const [pendingId, setPendingId] = useState<string>('');
 
   const defaultQ = searchParams.get('q') ?? '';
   const defaultCategoryId = searchParams.get('categoryId') ?? '';
@@ -76,8 +76,14 @@ export default function InventoryPage() {
     const fetchFilters = async () => {
       try {
         const [categoriesRes, locationsRes] = await Promise.all([
-          fetch('/api/inventory/categories', { cache: 'no-store', credentials: 'same-origin' }),
-          fetch('/api/inventory/locations', { cache: 'no-store', credentials: 'same-origin' }),
+          fetch('/api/inventory/categories', {
+            cache: 'no-store',
+            credentials: 'same-origin',
+          }),
+          fetch('/api/inventory/locations', {
+            cache: 'no-store',
+            credentials: 'same-origin',
+          }),
         ]);
 
         if (!categoriesRes.ok || !locationsRes.ok) {
@@ -110,10 +116,13 @@ export default function InventoryPage() {
     setError('');
 
     try {
-      const response = await fetch(`/api/inventory/items${queryString ? `?${queryString}` : ''}`, {
-        cache: 'no-store',
-        credentials: 'same-origin',
-      });
+      const response = await fetch(
+        `/api/inventory/items${queryString ? `?${queryString}` : ''}`,
+        {
+          cache: 'no-store',
+          credentials: 'same-origin',
+        }
+      );
 
       if (!response.ok) {
         throw new Error('failed to fetch items');
@@ -132,7 +141,7 @@ export default function InventoryPage() {
   }, [fetchItems]);
 
   const onCarryOut = async (id: string) => {
-    setCarryingId(id);
+    setPendingId(id);
     setError('');
     try {
       const response = await fetch(`/api/inventory/items/${id}/carry-out`, {
@@ -148,7 +157,28 @@ export default function InventoryPage() {
     } catch {
       setError('持ち出し処理に失敗しました。');
     } finally {
-      setCarryingId('');
+      setPendingId('');
+    }
+  };
+
+  const onRestock = async (id: string) => {
+    setPendingId(id);
+    setError('');
+    try {
+      const response = await fetch(`/api/inventory/items/${id}/restock`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ amount: 1 }),
+      });
+      if (!response.ok) {
+        throw new Error('FAILED');
+      }
+      await fetchItems();
+    } catch {
+      setError('補填処理に失敗しました。');
+    } finally {
+      setPendingId('');
     }
   };
 
@@ -169,10 +199,16 @@ export default function InventoryPage() {
       <header className="space-y-3">
         <h1 className="text-2xl font-semibold text-brand-text">在庫一覧</h1>
         <div className="flex flex-wrap gap-2 text-sm">
-          <Link href="/inventory/new" className="rounded border border-brand-border px-3 py-1.5 text-brand-text hover:bg-brand-surface-alt">
+          <Link
+            href="/inventory/new"
+            className="rounded border border-brand-border px-3 py-1.5 text-brand-text hover:bg-brand-surface-alt"
+          >
             新規登録
           </Link>
-          <Link href="/inventory/locations" className="rounded border border-brand-border px-3 py-1.5 text-brand-text hover:bg-brand-surface-alt">
+          <Link
+            href="/inventory/locations"
+            className="rounded border border-brand-border px-3 py-1.5 text-brand-text hover:bg-brand-surface-alt"
+          >
             保管場所管理
           </Link>
         </div>
@@ -180,7 +216,10 @@ export default function InventoryPage() {
 
       <section className="rounded-lg border border-brand-border bg-brand-surface p-4">
         <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-4">
-          <label className="flex flex-col gap-2 text-sm font-medium text-brand-text md:col-span-2" htmlFor="inventory-q">
+          <label
+            className="flex flex-col gap-2 text-sm font-medium text-brand-text md:col-span-2"
+            htmlFor="inventory-q"
+          >
             検索
             <input
               id="inventory-q"
@@ -192,7 +231,10 @@ export default function InventoryPage() {
             />
           </label>
 
-          <label className="flex flex-col gap-2 text-sm font-medium text-brand-text" htmlFor="inventory-category">
+          <label
+            className="flex flex-col gap-2 text-sm font-medium text-brand-text"
+            htmlFor="inventory-category"
+          >
             カテゴリ
             <select
               id="inventory-category"
@@ -209,7 +251,10 @@ export default function InventoryPage() {
             </select>
           </label>
 
-          <label className="flex flex-col gap-2 text-sm font-medium text-brand-text" htmlFor="inventory-location">
+          <label
+            className="flex flex-col gap-2 text-sm font-medium text-brand-text"
+            htmlFor="inventory-location"
+          >
             保管場所
             <select
               id="inventory-location"
@@ -226,7 +271,7 @@ export default function InventoryPage() {
             </select>
           </label>
 
-          <div className="md:col-span-4 flex justify-end">
+          <div className="flex justify-end md:col-span-4">
             <button
               type="submit"
               className="rounded border border-brand-primary bg-brand-primary px-4 py-2 text-sm font-medium text-brand-primaryText transition hover:opacity-90"
@@ -251,33 +296,67 @@ export default function InventoryPage() {
             {items.map((item) => {
               const imageUrl = toSafeImageUrl(item.imageUrl);
               return (
-                <article key={item.id} className="rounded-lg border border-brand-border bg-brand-surface p-3">
+                <article
+                  key={item.id}
+                  className="rounded-lg border border-brand-border bg-brand-surface p-3"
+                >
                   <div className="flex items-start gap-3">
                     {imageUrl ? (
-                      <img src={imageUrl} alt={item.name} loading="lazy" className="h-14 w-14 shrink-0 rounded object-cover" referrerPolicy="no-referrer" />
+                      <img
+                        src={imageUrl}
+                        alt={item.name}
+                        loading="lazy"
+                        className="h-14 w-14 shrink-0 rounded object-cover"
+                        referrerPolicy="no-referrer"
+                      />
                     ) : (
-                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded bg-brand-surface-alt text-xs text-brand-muted">No Img</div>
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded bg-brand-surface-alt text-xs text-brand-muted">
+                        No Img
+                      </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs text-brand-muted">{item.sku}</p>
-                      <Link href={`/inventory/${item.id}`} className="block truncate text-base font-medium text-brand-primary underline">
+                      <p className="truncate text-xs text-brand-muted">
+                        {item.sku}
+                      </p>
+                      <Link
+                        href={`/inventory/${item.id}`}
+                        className="block truncate text-base font-medium text-brand-primary underline"
+                      >
                         {item.name}
                       </Link>
-                      <p className="truncate text-sm text-brand-text">{item.categoryName} / {item.locationName}</p>
+                      <p className="truncate text-sm text-brand-text">
+                        {item.categoryName} / {item.locationName}
+                      </p>
                     </div>
                   </div>
                   <div className="mt-3 flex items-center justify-between text-sm">
-                    <p className="text-brand-text">数量: <span className="font-medium">{item.quantity}{item.unit ? ` ${item.unit}` : ''}</span></p>
-                    <p className="text-xs text-brand-muted">{formatDateTime(item.updatedAt)}</p>
+                    <p className="text-brand-text">
+                      数量:{' '}
+                      <span className="font-medium">
+                        {item.quantity}
+                        {item.unit ? ` ${item.unit}` : ''}
+                      </span>
+                    </p>
+                    <p className="text-xs text-brand-muted">
+                      {formatDateTime(item.updatedAt)}
+                    </p>
                   </div>
-                  <div className="mt-3 flex justify-end">
+                  <div className="mt-3 flex justify-end gap-2">
                     <button
                       type="button"
                       onClick={() => onCarryOut(item.id)}
-                      disabled={carryingId === item.id || item.quantity <= 0}
+                      disabled={pendingId === item.id || item.quantity <= 0}
                       className="rounded border border-brand-primary px-3 py-1.5 text-xs text-brand-primary disabled:opacity-50"
                     >
-                      {carryingId === item.id ? '処理中...' : '持ち出し -1'}
+                      {pendingId === item.id ? '処理中...' : '持ち出し -1'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRestock(item.id)}
+                      disabled={pendingId === item.id}
+                      className="rounded border border-brand-primary px-3 py-1.5 text-xs text-brand-primary disabled:opacity-50"
+                    >
+                      {pendingId === item.id ? '処理中...' : '補填 +1'}
                     </button>
                   </div>
                 </article>
@@ -307,14 +386,25 @@ export default function InventoryPage() {
                     <tr key={item.id} className="border-t border-brand-border">
                       <td className="px-3 py-2">
                         {imageUrl ? (
-                          <img src={imageUrl} alt={item.name} loading="lazy" className="h-12 w-12 rounded object-cover" referrerPolicy="no-referrer" />
+                          <img
+                            src={imageUrl}
+                            alt={item.name}
+                            loading="lazy"
+                            className="h-12 w-12 rounded object-cover"
+                            referrerPolicy="no-referrer"
+                          />
                         ) : (
-                          <div className="flex h-12 w-12 items-center justify-center rounded bg-brand-surface-alt text-xs text-brand-muted">No Img</div>
+                          <div className="flex h-12 w-12 items-center justify-center rounded bg-brand-surface-alt text-xs text-brand-muted">
+                            No Img
+                          </div>
                         )}
                       </td>
                       <td className="px-3 py-2 text-brand-muted">{item.sku}</td>
                       <td className="px-3 py-2">
-                        <Link href={`/inventory/${item.id}`} className="text-brand-primary underline">
+                        <Link
+                          href={`/inventory/${item.id}`}
+                          className="text-brand-primary underline"
+                        >
                           {item.name}
                         </Link>
                       </td>
@@ -322,16 +412,30 @@ export default function InventoryPage() {
                       <td className="px-3 py-2">{item.locationName}</td>
                       <td className="px-3 py-2">{item.quantity}</td>
                       <td className="px-3 py-2">{item.unit ?? '-'}</td>
-                      <td className="px-3 py-2 text-brand-muted">{formatDateTime(item.updatedAt)}</td>
+                      <td className="px-3 py-2 text-brand-muted">
+                        {formatDateTime(item.updatedAt)}
+                      </td>
                       <td className="px-3 py-2">
-                        <button
-                          type="button"
-                          onClick={() => onCarryOut(item.id)}
-                          disabled={carryingId === item.id || item.quantity <= 0}
-                          className="rounded border border-brand-primary px-2 py-1 text-xs text-brand-primary disabled:opacity-50"
-                        >
-                          {carryingId === item.id ? '処理中...' : '-1'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onCarryOut(item.id)}
+                            disabled={
+                              pendingId === item.id || item.quantity <= 0
+                            }
+                            className="rounded border border-brand-primary px-2 py-1 text-xs text-brand-primary disabled:opacity-50"
+                          >
+                            {pendingId === item.id ? '処理中...' : '-1'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onRestock(item.id)}
+                            disabled={pendingId === item.id}
+                            className="rounded border border-brand-primary px-2 py-1 text-xs text-brand-primary disabled:opacity-50"
+                          >
+                            {pendingId === item.id ? '処理中...' : '+1'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
