@@ -33,3 +33,14 @@ export type MasterWorkType = {
   createdAt: string | null;
   updatedAt: string | null;
 };
+
+export type MasterMachine = {
+  id: string;
+  machineCode: string;
+  name: string;
+  active: boolean;
+  rate: number | null;
+  rateUnit: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
