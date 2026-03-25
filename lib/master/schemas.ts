@@ -72,6 +72,22 @@ export const masterWorkTypeUpdateSchema = masterWorkTypeCreateSchema
   .partial()
   .refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' });
 
+const nullableNumber = z
+  .union([z.number().finite(), z.null(), z.undefined()])
+  .transform((value) => (typeof value === 'number' ? value : null));
+
+export const masterMachineCreateSchema = z.object({
+  name: z.string().trim().min(1),
+  machineCode: z.string().trim().min(1),
+  active: z.boolean().default(true),
+  rate: nullableNumber,
+  rateUnit: nullableText,
+});
+
+export const masterMachineUpdateSchema = masterMachineCreateSchema
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' });
+
 export const masterIdSchema = z.object({
   id: z.string().uuid(),
 });

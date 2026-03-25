@@ -29,6 +29,12 @@ export default async function MasterPage() {
         >
           作業区分管理
         </Link>
+        <Link
+          href="/dashboard/master/machines"
+          className="rounded-lg border border-brand-border bg-brand-surface p-4 text-brand-text hover:bg-brand-surface-alt"
+        >
+          機械管理
+        </Link>
       </div>
     </section>
   );
