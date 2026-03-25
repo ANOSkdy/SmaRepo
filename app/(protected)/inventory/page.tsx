@@ -348,7 +348,7 @@ export default function InventoryPage() {
                       disabled={pendingId === item.id || item.quantity <= 0}
                       className="rounded border border-brand-primary px-3 py-1.5 text-xs text-brand-primary disabled:opacity-50"
                     >
-                      {pendingId === item.id ? '処理中...' : '持ち出し -1'}
+                      {pendingId === item.id ? '処理中...' : '-1'}
                     </button>
                     <button
                       type="button"
@@ -356,7 +356,7 @@ export default function InventoryPage() {
                       disabled={pendingId === item.id}
                       className="rounded border border-brand-primary px-3 py-1.5 text-xs text-brand-primary disabled:opacity-50"
                     >
-                      {pendingId === item.id ? '処理中...' : '補填 +1'}
+                      {pendingId === item.id ? '処理中...' : '+1'}
                     </button>
                   </div>
                 </article>
