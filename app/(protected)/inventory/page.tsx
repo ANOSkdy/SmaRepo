@@ -111,30 +111,38 @@ export default function InventoryPage() {
     };
   }, []);
 
-  const fetchItems = useCallback(async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      const response = await fetch(
-        `/api/inventory/items${queryString ? `?${queryString}` : ''}`,
-        {
-          cache: 'no-store',
-          credentials: 'same-origin',
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('failed to fetch items');
+  const fetchItems = useCallback(
+    async (options?: { silent?: boolean }) => {
+      const silent = options?.silent ?? false;
+      if (!silent) {
+        setLoading(true);
       }
+      setError('');
 
-      setItems((await response.json()) as InventoryListItem[]);
-    } catch {
-      setError('在庫一覧の取得に失敗しました。');
-    } finally {
-      setLoading(false);
-    }
-  }, [queryString]);
+      try {
+        const response = await fetch(
+          `/api/inventory/items${queryString ? `?${queryString}` : ''}`,
+          {
+            cache: 'no-store',
+            credentials: 'same-origin',
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('failed to fetch items');
+        }
+
+        setItems((await response.json()) as InventoryListItem[]);
+      } catch {
+        setError('在庫一覧の取得に失敗しました。');
+      } finally {
+        if (!silent) {
+          setLoading(false);
+        }
+      }
+    },
+    [queryString]
+  );
 
   useEffect(() => {
     fetchItems();
@@ -153,7 +161,7 @@ export default function InventoryPage() {
       if (!response.ok) {
         throw new Error('FAILED');
       }
-      await fetchItems();
+      await fetchItems({ silent: true });
     } catch {
       setError('持ち出し処理に失敗しました。');
     } finally {
@@ -174,7 +182,7 @@ export default function InventoryPage() {
       if (!response.ok) {
         throw new Error('FAILED');
       }
-      await fetchItems();
+      await fetchItems({ silent: true });
     } catch {
       setError('補填処理に失敗しました。');
     } finally {
@@ -348,7 +356,7 @@ export default function InventoryPage() {
                       disabled={pendingId === item.id || item.quantity <= 0}
                       className="rounded border border-brand-primary px-3 py-1.5 text-xs text-brand-primary disabled:opacity-50"
                     >
-                      {pendingId === item.id ? '処理中...' : '-1'}
+                      -1
                     </button>
                     <button
                       type="button"
@@ -356,8 +364,14 @@ export default function InventoryPage() {
                       disabled={pendingId === item.id}
                       className="rounded border border-brand-primary px-3 py-1.5 text-xs text-brand-primary disabled:opacity-50"
                     >
-                      {pendingId === item.id ? '処理中...' : '+1'}
+                      +1
                     </button>
+                    {pendingId === item.id ? (
+                      <span
+                        className="h-4 w-4 animate-spin rounded-full border-2 border-brand-primary border-t-transparent"
+                        aria-label="loading"
+                      />
+                    ) : null}
                   </div>
                 </article>
               );
@@ -425,7 +439,7 @@ export default function InventoryPage() {
                             }
                             className="rounded border border-brand-primary px-2 py-1 text-xs text-brand-primary disabled:opacity-50"
                           >
-                            {pendingId === item.id ? '処理中...' : '-1'}
+                            -1
                           </button>
                           <button
                             type="button"
@@ -433,8 +447,14 @@ export default function InventoryPage() {
                             disabled={pendingId === item.id}
                             className="rounded border border-brand-primary px-2 py-1 text-xs text-brand-primary disabled:opacity-50"
                           >
-                            {pendingId === item.id ? '処理中...' : '+1'}
+                            +1
                           </button>
+                          {pendingId === item.id ? (
+                            <span
+                              className="h-4 w-4 animate-spin rounded-full border-2 border-brand-primary border-t-transparent"
+                              aria-label="loading"
+                            />
+                          ) : null}
                         </div>
                       </td>
                     </tr>
