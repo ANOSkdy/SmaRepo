@@ -225,7 +225,10 @@ export function InventoryItemForm({
         </div>
       ) : null}
 
-      <div className="flex justify-between gap-3">
+      <div
+        className="sticky bottom-0 -mx-4 flex justify-between gap-3 border-t border-brand-border bg-brand-surface px-4 pt-3"
+        style={{ paddingBottom: 'calc(var(--safe-area-bottom) + 0.75rem)' }}
+      >
         {mode === 'edit' ? (
           <button type="button" onClick={onDelete} disabled={saving || uploading || deleting} className="rounded border border-red-600 px-4 py-2 text-sm text-red-600">
             {deleting ? '削除中...' : '削除'}

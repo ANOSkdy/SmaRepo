@@ -4,6 +4,7 @@
 
 :root {
   color-scheme: light;
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --color-surface: #f8fafc;
   --color-surface-alt: #ffffff;
   --color-text: #111827;
