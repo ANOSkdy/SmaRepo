@@ -4,6 +4,20 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { InventoryCategory, InventoryLocation } from '@/types/inventory';
 
+type InventoryApiError = {
+  error?: string;
+};
+
+const createErrorMessage: Record<string, string> = {
+  INVALID_JSON: '送信データの形式が不正です。',
+  INVALID_BODY: '入力内容に不備があります。',
+  SKU_ALREADY_EXISTS: '同じ品目コード（SKU）が既に登録されています。',
+  INVALID_CATEGORY_ID: '選択したカテゴリが無効です。再選択してください。',
+  INVALID_LOCATION_ID: '選択した保管場所が無効です。再選択してください。',
+  INVALID_REFERENCE: '参照データが不正です。入力内容をご確認ください。',
+  CATEGORY_SCHEMA_MISMATCH: 'サーバー設定に不整合があります。管理者へ連絡してください。',
+};
+
 type InventoryFormValue = {
   id?: string;
   sku: string;
@@ -94,14 +108,25 @@ export function InventoryItemForm({
       });
 
       if (!response.ok) {
-        throw new Error('SAVE_FAILED');
+        let apiError = 'SAVE_FAILED';
+        try {
+          const data = (await response.json()) as InventoryApiError;
+          if (typeof data.error === 'string' && data.error.length > 0) {
+            apiError = data.error;
+          }
+        } catch {
+          // no-op
+        }
+
+        throw new Error(apiError);
       }
 
       const data = (await response.json()) as { id: string };
       router.push(mode === 'create' ? `/inventory/${data.id}` : `/inventory/${value.id}`);
       router.refresh();
-    } catch {
-      setError('保存に失敗しました。入力内容をご確認ください。');
+    } catch (error) {
+      const apiError = error instanceof Error ? error.message : 'SAVE_FAILED';
+      setError(createErrorMessage[apiError] ?? '保存に失敗しました。入力内容をご確認ください。');
     } finally {
       setSaving(false);
     }

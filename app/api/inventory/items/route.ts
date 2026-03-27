@@ -4,6 +4,22 @@ import { inventoryQuery } from '@/lib/inventory/db';
 import { inventoryItemCreateSchema, normalizeNullableText } from '@/lib/inventory/schemas';
 import type { InventoryItemListEntry } from '@/types/inventory';
 
+type DbError = {
+  code?: string;
+  constraint?: string;
+  message?: string;
+};
+
+function toSafeDbError(error: unknown): DbError {
+  if (!error || typeof error !== 'object') return {};
+  const maybe = error as DbError;
+  return {
+    code: maybe.code,
+    constraint: maybe.constraint,
+    message: maybe.message,
+  };
+}
+
 export const runtime = 'nodejs';
 
 type InventoryItemListRow = {
@@ -125,6 +141,32 @@ export async function POST(request: Request) {
   const payload = parsed.data;
 
   try {
+    const referenceResult = await inventoryQuery<{ category_exists: boolean; location_exists: boolean }>(
+      `
+        SELECT
+          EXISTS (
+            SELECT 1
+            FROM public.machines m
+            WHERE m.machine_code = $1
+          ) AS category_exists,
+          EXISTS (
+            SELECT 1
+            FROM inventory.locations l
+            WHERE l.id = $2::uuid
+              AND l.is_active = TRUE
+          ) AS location_exists
+      `,
+      [payload.categoryId, payload.locationId],
+    );
+
+    const references = referenceResult.rows[0];
+    if (!references?.category_exists) {
+      return NextResponse.json({ error: 'INVALID_CATEGORY_ID' }, { status: 400 });
+    }
+    if (!references.location_exists) {
+      return NextResponse.json({ error: 'INVALID_LOCATION_ID' }, { status: 400 });
+    }
+
     const result = await inventoryQuery<{ id: string }>(
       `
         INSERT INTO inventory.items (
@@ -158,7 +200,25 @@ export async function POST(request: Request) {
     );
 
     return NextResponse.json({ id: result.rows[0]?.id ?? null }, { status: 201 });
-  } catch {
+  } catch (error) {
+    const dbError = toSafeDbError(error);
+
+    if (dbError.code === '23505') {
+      return NextResponse.json({ error: 'SKU_ALREADY_EXISTS' }, { status: 409 });
+    }
+
+    if (dbError.code === '23503') {
+      if (dbError.constraint === 'items_location_id_fkey') {
+        return NextResponse.json({ error: 'INVALID_LOCATION_ID' }, { status: 409 });
+      }
+      return NextResponse.json({ error: 'INVALID_REFERENCE' }, { status: 409 });
+    }
+
+    if (dbError.code === '22P02') {
+      return NextResponse.json({ error: 'CATEGORY_SCHEMA_MISMATCH' }, { status: 409 });
+    }
+
+    console.error('[inventory/items] create failed', dbError);
     return NextResponse.json({ error: 'DB_WRITE_FAILED' }, { status: 500 });
   }
 }
