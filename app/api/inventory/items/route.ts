@@ -221,10 +221,7 @@ export async function POST(request: Request) {
     }
 
     if (dbError.code === '23502') {
-      if (dbError.column === 'image_url') {
-        return NextResponse.json({ error: 'IMAGE_URL_REQUIRED_BY_DB_SCHEMA' }, { status: 409 });
-      }
-      return NextResponse.json({ error: 'REQUIRED_FIELD_MISSING' }, { status: 400 });
+      return NextResponse.json({ error: 'DB_SCHEMA_CONSTRAINT_VIOLATION' }, { status: 500 });
     }
 
     console.error('[inventory/items] create failed', dbError);

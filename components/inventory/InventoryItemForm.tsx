@@ -16,8 +16,6 @@ const createErrorMessage: Record<string, string> = {
   INVALID_LOCATION_ID: '選択した保管場所が無効です。再選択してください。',
   INVALID_REFERENCE: '参照データが不正です。入力内容をご確認ください。',
   CATEGORY_SCHEMA_MISMATCH: 'サーバー設定に不整合があります。管理者へ連絡してください。',
-  IMAGE_URL_REQUIRED_BY_DB_SCHEMA: '画像設定にサーバー側の不整合があります。管理者へ連絡してください。',
-  REQUIRED_FIELD_MISSING: '必須項目が不足しています。入力内容をご確認ください。',
 };
 
 type InventoryFormValue = {
