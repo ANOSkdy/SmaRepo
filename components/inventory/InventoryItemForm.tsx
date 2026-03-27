@@ -18,6 +18,12 @@ type InventoryFormValue = {
   imagePath: string | null;
 };
 
+type ApiErrorResponse = {
+  error?: string;
+  errorCode?: string;
+  debugId?: string;
+};
+
 export function InventoryItemForm({
   mode,
   initialValue,
@@ -35,6 +41,8 @@ export function InventoryItemForm({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [debugId, setDebugId] = useState<string | null>(null);
 
   useEffect(() => setValue(initialValue), [initialValue]);
 
@@ -43,6 +51,8 @@ export function InventoryItemForm({
 
     setUploading(true);
     setError('');
+    setErrorCode(null);
+    setDebugId(null);
 
     try {
       const formData = new FormData();
@@ -71,6 +81,8 @@ export function InventoryItemForm({
     event.preventDefault();
     setSaving(true);
     setError('');
+    setErrorCode(null);
+    setDebugId(null);
 
     try {
       const payload = {
@@ -94,6 +106,11 @@ export function InventoryItemForm({
       });
 
       if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as ApiErrorResponse;
+        const code = data.errorCode ?? data.error ?? null;
+        const traceId = data.debugId ?? null;
+        setErrorCode(code);
+        setDebugId(traceId);
         throw new Error('SAVE_FAILED');
       }
 
@@ -113,6 +130,8 @@ export function InventoryItemForm({
 
     setDeleting(true);
     setError('');
+    setErrorCode(null);
+    setDebugId(null);
     try {
       const response = await fetch(`/api/inventory/items/${value.id}`, {
         method: 'DELETE',
@@ -198,7 +217,13 @@ export function InventoryItemForm({
       </label>
 
       {value.imageUrl ? <img src={value.imageUrl} alt="uploaded" className="h-28 w-28 rounded object-cover" /> : null}
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? (
+        <div className="space-y-1 text-sm text-red-600">
+          <p>{error}</p>
+          {errorCode ? <p>エラーコード: {errorCode}</p> : null}
+          {debugId ? <p>Debug ID: {debugId}</p> : null}
+        </div>
+      ) : null}
 
       <div className="flex justify-between gap-3">
         {mode === 'edit' ? (
