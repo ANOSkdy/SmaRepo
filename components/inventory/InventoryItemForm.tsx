@@ -6,6 +6,8 @@ import type { InventoryCategory, InventoryLocation } from '@/types/inventory';
 
 type InventoryApiError = {
   error?: string;
+  errorCode?: string;
+  debugId?: string;
 };
 
 const createErrorMessage: Record<string, string> = {
@@ -109,24 +111,32 @@ export function InventoryItemForm({
 
       if (!response.ok) {
         let apiError = 'SAVE_FAILED';
+        let debugId = '';
+
         try {
           const data = (await response.json()) as InventoryApiError;
-          if (typeof data.error === 'string' && data.error.length > 0) {
+          if (typeof data.errorCode === 'string' && data.errorCode.length > 0) {
+            apiError = data.errorCode;
+          } else if (typeof data.error === 'string' && data.error.length > 0) {
             apiError = data.error;
+          }
+          if (typeof data.debugId === 'string' && data.debugId.length > 0) {
+            debugId = data.debugId;
           }
         } catch {
           // no-op
         }
 
-        throw new Error(apiError);
+        const message = createErrorMessage[apiError] ?? '保存に失敗しました。入力内容をご確認ください。';
+        const diagnostics = [apiError, debugId ? `debugId: ${debugId}` : ''].filter(Boolean).join(' / ');
+        throw new Error(diagnostics ? `${message} (${diagnostics})` : message);
       }
 
       const data = (await response.json()) as { id: string };
       router.push(mode === 'create' ? `/inventory/${data.id}` : `/inventory/${value.id}`);
       router.refresh();
     } catch (error) {
-      const apiError = error instanceof Error ? error.message : 'SAVE_FAILED';
-      setError(createErrorMessage[apiError] ?? '保存に失敗しました。入力内容をご確認ください。');
+      setError(error instanceof Error ? error.message : '保存に失敗しました。入力内容をご確認ください。');
     } finally {
       setSaving(false);
     }

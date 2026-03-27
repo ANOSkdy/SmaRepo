@@ -8,6 +8,8 @@ type DbError = {
   code?: string;
   constraint?: string;
   column?: string;
+  table?: string;
+  detail?: string;
   message?: string;
 };
 
@@ -18,7 +20,43 @@ function toSafeDbError(error: unknown): DbError {
     code: maybe.code,
     constraint: maybe.constraint,
     column: maybe.column,
+    table: maybe.table,
+    detail: maybe.detail,
     message: maybe.message,
+  };
+}
+
+
+
+type InventoryCreateMeta = {
+  sku: string | null;
+  categoryId: string | null;
+  locationId: string | null;
+  hasImageUrl: boolean;
+  hasImagePath: boolean;
+  quantity: number | null;
+};
+
+function toInventoryCreateMeta(value: unknown): InventoryCreateMeta {
+  if (!value || typeof value !== 'object') {
+    return {
+      sku: null,
+      categoryId: null,
+      locationId: null,
+      hasImageUrl: false,
+      hasImagePath: false,
+      quantity: null,
+    };
+  }
+
+  const payload = value as Record<string, unknown>;
+  return {
+    sku: typeof payload.sku === 'string' ? payload.sku : null,
+    categoryId: typeof payload.categoryId === 'string' ? payload.categoryId : null,
+    locationId: typeof payload.locationId === 'string' ? payload.locationId : null,
+    hasImageUrl: typeof payload.imageUrl === 'string' && payload.imageUrl.trim().length > 0,
+    hasImagePath: typeof payload.imagePath === 'string' && payload.imagePath.trim().length > 0,
+    quantity: typeof payload.quantity === 'number' ? payload.quantity : null,
   };
 }
 
@@ -123,24 +161,49 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const debugId = crypto.randomUUID();
+  const respond = (body: Record<string, unknown>, status: number) =>
+    NextResponse.json(
+      {
+        ...body,
+        debugId,
+      },
+      {
+        status,
+        headers: { 'x-debug-id': debugId },
+      },
+    );
+
+  console.info('[inventory/items] create started', { debugId });
+
   const session = await auth();
   if (!session?.user) {
-    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+    console.info('[inventory/items] create unauthorized', { debugId });
+    return respond({ error: 'UNAUTHORIZED', errorCode: 'UNAUTHORIZED' }, 401);
   }
 
   let body: unknown;
   try {
     body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'INVALID_JSON' }, { status: 400 });
+    console.info('[inventory/items] body parsed', { debugId, ...toInventoryCreateMeta(body) });
+  } catch (error) {
+    console.error('[inventory/items] invalid json', { debugId, dbError: toSafeDbError(error) });
+    return respond({ error: 'INVALID_JSON', errorCode: 'INVALID_JSON' }, 400);
   }
 
   const parsed = inventoryItemCreateSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: 'INVALID_BODY' }, { status: 400 });
+    console.info('[inventory/items] body validation failed', {
+      debugId,
+      issues: parsed.error.issues.length,
+      ...toInventoryCreateMeta(body),
+    });
+    return respond({ error: 'INVALID_BODY', errorCode: 'INVALID_BODY' }, 400);
   }
 
   const payload = parsed.data;
+  const meta = toInventoryCreateMeta(payload);
+  console.info('[inventory/items] body validated', { debugId, ...meta });
 
   try {
     const referenceResult = await inventoryQuery<{ category_exists: boolean; location_exists: boolean }>(
@@ -162,12 +225,21 @@ export async function POST(request: Request) {
     );
 
     const references = referenceResult.rows[0];
+    console.info('[inventory/items] pre-insert checks result', {
+      debugId,
+      categoryExists: references?.category_exists ?? false,
+      locationExists: references?.location_exists ?? false,
+      ...meta,
+    });
+
     if (!references?.category_exists) {
-      return NextResponse.json({ error: 'INVALID_CATEGORY_ID' }, { status: 400 });
+      return respond({ error: 'INVALID_CATEGORY_ID', errorCode: 'INVALID_CATEGORY_ID' }, 400);
     }
     if (!references.location_exists) {
-      return NextResponse.json({ error: 'INVALID_LOCATION_ID' }, { status: 400 });
+      return respond({ error: 'INVALID_LOCATION_ID', errorCode: 'INVALID_LOCATION_ID' }, 400);
     }
+
+    console.info('[inventory/items] db insert attempt', { debugId, ...meta });
 
     const result = await inventoryQuery<{ id: string }>(
       `
@@ -201,30 +273,33 @@ export async function POST(request: Request) {
       ],
     );
 
-    return NextResponse.json({ id: result.rows[0]?.id ?? null }, { status: 201 });
+    const createdId = result.rows[0]?.id ?? null;
+    console.info('[inventory/items] db insert succeeded', { debugId, createdId, ...meta });
+    return respond({ id: createdId }, 201);
   } catch (error) {
     const dbError = toSafeDbError(error);
+    console.error('[inventory/items] db insert failed', { debugId, ...meta, dbError });
 
     if (dbError.code === '23505') {
-      return NextResponse.json({ error: 'SKU_ALREADY_EXISTS' }, { status: 409 });
+      return respond({ error: 'SKU_ALREADY_EXISTS', errorCode: 'SKU_ALREADY_EXISTS' }, 409);
     }
 
     if (dbError.code === '23503') {
       if (dbError.constraint === 'items_location_id_fkey') {
-        return NextResponse.json({ error: 'INVALID_LOCATION_ID' }, { status: 409 });
+        return respond({ error: 'INVALID_LOCATION_ID', errorCode: 'INVALID_LOCATION_ID' }, 409);
       }
-      return NextResponse.json({ error: 'INVALID_REFERENCE' }, { status: 409 });
+      return respond({ error: 'INVALID_REFERENCE', errorCode: 'INVALID_REFERENCE' }, 409);
     }
 
     if (dbError.code === '22P02') {
-      return NextResponse.json({ error: 'CATEGORY_SCHEMA_MISMATCH' }, { status: 409 });
+      return respond({ error: 'CATEGORY_SCHEMA_MISMATCH', errorCode: 'CATEGORY_SCHEMA_MISMATCH' }, 409);
     }
 
     if (dbError.code === '23502') {
-      return NextResponse.json({ error: 'DB_SCHEMA_CONSTRAINT_VIOLATION' }, { status: 500 });
+      return respond({ error: 'DB_SCHEMA_CONSTRAINT_VIOLATION', errorCode: 'DB_SCHEMA_CONSTRAINT_VIOLATION' }, 500);
     }
 
-    console.error('[inventory/items] create failed', dbError);
-    return NextResponse.json({ error: 'DB_WRITE_FAILED' }, { status: 500 });
+    return respond({ error: 'DB_WRITE_FAILED', errorCode: 'DB_WRITE_FAILED' }, 500);
   }
 }
+
