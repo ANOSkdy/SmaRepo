@@ -1,0 +1,9 @@
+BEGIN;
+
+ALTER TABLE inventory.items
+  ALTER COLUMN image_url DROP NOT NULL;
+
+ALTER TABLE inventory.items
+  ALTER COLUMN image_path DROP NOT NULL;
+
+COMMIT;

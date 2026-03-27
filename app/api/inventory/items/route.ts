@@ -7,6 +7,7 @@ import type { InventoryItemListEntry } from '@/types/inventory';
 type DbError = {
   code?: string;
   constraint?: string;
+  column?: string;
   message?: string;
 };
 
@@ -16,6 +17,7 @@ function toSafeDbError(error: unknown): DbError {
   return {
     code: maybe.code,
     constraint: maybe.constraint,
+    column: maybe.column,
     message: maybe.message,
   };
 }
@@ -216,6 +218,13 @@ export async function POST(request: Request) {
 
     if (dbError.code === '22P02') {
       return NextResponse.json({ error: 'CATEGORY_SCHEMA_MISMATCH' }, { status: 409 });
+    }
+
+    if (dbError.code === '23502') {
+      if (dbError.column === 'image_url') {
+        return NextResponse.json({ error: 'IMAGE_URL_REQUIRED_BY_DB_SCHEMA' }, { status: 409 });
+      }
+      return NextResponse.json({ error: 'REQUIRED_FIELD_MISSING' }, { status: 400 });
     }
 
     console.error('[inventory/items] create failed', dbError);
