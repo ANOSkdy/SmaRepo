@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { inventoryQuery } from '@/lib/inventory/db';
@@ -23,6 +24,39 @@ type InventoryItemListRow = {
   categoryName: string;
   locationName: string;
 };
+
+type DbError = {
+  code?: string;
+  table?: string;
+  column?: string;
+  constraint?: string;
+  message?: string;
+};
+
+type CreateDiagnostics = {
+  debugId: string;
+  sku: string;
+  categoryId: string;
+  locationId: string;
+  hasImageUrl: boolean;
+  hasImagePath: boolean;
+  quantity: number;
+};
+
+function toSafeDbError(error: unknown): DbError {
+  if (!error || typeof error !== 'object') {
+    return {};
+  }
+
+  const maybe = error as DbError;
+  return {
+    code: maybe.code,
+    table: maybe.table,
+    column: maybe.column,
+    constraint: maybe.constraint,
+    message: maybe.message,
+  };
+}
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -114,17 +148,75 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: 'INVALID_JSON' }, { status: 400 });
+    return NextResponse.json({ error: 'INVALID_JSON', errorCode: 'INVALID_JSON' }, { status: 400 });
   }
 
   const parsed = inventoryItemCreateSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: 'INVALID_BODY' }, { status: 400 });
+    return NextResponse.json({ error: 'INVALID_BODY', errorCode: 'INVALID_BODY' }, { status: 400 });
   }
 
   const payload = parsed.data;
+  const diagnostics: CreateDiagnostics = {
+    debugId: randomUUID(),
+    sku: payload.sku,
+    categoryId: payload.categoryId,
+    locationId: payload.locationId,
+    hasImageUrl: Boolean(normalizeNullableText(payload.imageUrl)),
+    hasImagePath: Boolean(normalizeNullableText(payload.imagePath)),
+    quantity: payload.quantity,
+  };
 
   try {
+    const categoryExists = await inventoryQuery<{ exists: boolean }>(
+      `
+        SELECT EXISTS (
+          SELECT 1
+          FROM machines m
+          WHERE COALESCE(
+            NULLIF(to_jsonb(m)->>'machine_code', ''),
+            NULLIF(to_jsonb(m)->>'machineid', ''),
+            NULLIF(to_jsonb(m)->>'machine_id', '')
+          ) = $1
+        ) AS exists
+      `,
+      [payload.categoryId],
+    );
+
+    if (!categoryExists.rows[0]?.exists) {
+      return NextResponse.json(
+        {
+          error: 'INVALID_CATEGORY',
+          errorCode: 'INVALID_CATEGORY',
+          debugId: diagnostics.debugId,
+        },
+        { status: 400 },
+      );
+    }
+
+    const locationExists = await inventoryQuery<{ exists: boolean }>(
+      `
+        SELECT EXISTS (
+          SELECT 1
+          FROM inventory.locations
+          WHERE id = $1::uuid
+            AND is_active = TRUE
+        ) AS exists
+      `,
+      [payload.locationId],
+    );
+
+    if (!locationExists.rows[0]?.exists) {
+      return NextResponse.json(
+        {
+          error: 'INVALID_LOCATION',
+          errorCode: 'INVALID_LOCATION',
+          debugId: diagnostics.debugId,
+        },
+        { status: 400 },
+      );
+    }
+
     const result = await inventoryQuery<{ id: string }>(
       `
         INSERT INTO inventory.items (
@@ -158,7 +250,57 @@ export async function POST(request: Request) {
     );
 
     return NextResponse.json({ id: result.rows[0]?.id ?? null }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: 'DB_WRITE_FAILED' }, { status: 500 });
+  } catch (error) {
+    const dbError = toSafeDbError(error);
+
+    console.error('[inventory/items] create failed', {
+      ...diagnostics,
+      code: dbError.code,
+      table: dbError.table,
+      column: dbError.column,
+      constraint: dbError.constraint,
+    });
+
+    if (dbError.code === '23505') {
+      return NextResponse.json(
+        {
+          error: 'SKU_ALREADY_EXISTS',
+          errorCode: 'SKU_ALREADY_EXISTS',
+          debugId: diagnostics.debugId,
+        },
+        { status: 409 },
+      );
+    }
+
+    if (dbError.code === '23502') {
+      return NextResponse.json(
+        {
+          error: 'SCHEMA_CONSTRAINT_MISMATCH',
+          errorCode: 'SCHEMA_CONSTRAINT_MISMATCH',
+          debugId: diagnostics.debugId,
+        },
+        { status: 500 },
+      );
+    }
+
+    if (dbError.code === '23503') {
+      return NextResponse.json(
+        {
+          error: 'REFERENCE_NOT_FOUND',
+          errorCode: 'REFERENCE_NOT_FOUND',
+          debugId: diagnostics.debugId,
+        },
+        { status: 409 },
+      );
+    }
+
+    return NextResponse.json(
+      {
+        error: 'DB_WRITE_FAILED',
+        errorCode: 'DB_WRITE_FAILED',
+        debugId: diagnostics.debugId,
+      },
+      { status: 500 },
+    );
   }
 }
