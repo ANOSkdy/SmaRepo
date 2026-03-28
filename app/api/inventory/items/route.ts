@@ -6,6 +6,15 @@ import { inventoryItemCreateSchema, normalizeNullableText } from '@/lib/inventor
 import type { InventoryItemListEntry } from '@/types/inventory';
 
 export const runtime = 'nodejs';
+const DEFAULT_PAGE_SIZE = 20;
+const MAX_PAGE_SIZE = 100;
+
+type InventoryItemsPagination = {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+};
 
 type InventoryItemListRow = {
   id: string;
@@ -68,7 +77,16 @@ export async function GET(request: Request) {
   const q = (url.searchParams.get('q') ?? '').trim();
   const categoryId = (url.searchParams.get('categoryId') ?? '').trim();
   const locationId = url.searchParams.get('locationId') ?? '';
-
+  const rawPage = Number.parseInt(url.searchParams.get('page') ?? '1', 10);
+  const rawPageSize = Number.parseInt(
+    url.searchParams.get('pageSize') ?? `${DEFAULT_PAGE_SIZE}`,
+    10
+  );
+  const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+  const pageSize =
+    Number.isFinite(rawPageSize) && rawPageSize > 0
+      ? Math.min(rawPageSize, MAX_PAGE_SIZE)
+      : DEFAULT_PAGE_SIZE;
   const params: unknown[] = [];
   let whereClause = 'WHERE i.is_active = TRUE';
 
@@ -88,6 +106,20 @@ export async function GET(request: Request) {
   }
 
   try {
+    const countResult = await inventoryQuery<{ total: string }>(
+      `
+        SELECT COUNT(*)::text AS total
+        FROM inventory.items i
+        ${whereClause}
+      `,
+      params,
+    );
+    const totalItems = Number.parseInt(countResult.rows[0]?.total ?? '0', 10) || 0;
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const safeOffset = (safePage - 1) * pageSize;
+    const queryParams = [...params, pageSize, safeOffset];
+
     const result = await inventoryQuery<InventoryItemListRow>(
       `
         WITH machine_rows AS (
@@ -128,11 +160,21 @@ export async function GET(request: Request) {
         JOIN inventory.locations l ON l.id = i.location_id
         ${whereClause}
         ORDER BY i.name ASC
+        LIMIT $${queryParams.length - 1}
+        OFFSET $${queryParams.length}
       `,
-      params,
+      queryParams,
     );
 
-    return NextResponse.json(result.rows as InventoryItemListEntry[]);
+    return NextResponse.json({
+      items: result.rows as InventoryItemListEntry[],
+      pagination: {
+        page: safePage,
+        pageSize,
+        totalItems,
+        totalPages,
+      } satisfies InventoryItemsPagination,
+    });
   } catch {
     return NextResponse.json({ error: 'DB_QUERY_FAILED' }, { status: 500 });
   }

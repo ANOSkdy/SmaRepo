@@ -17,6 +17,18 @@ type InventoryListItem = {
   locationName: string;
 };
 
+type InventoryListResponse = {
+  items: InventoryListItem[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+  };
+};
+
+const DEFAULT_PAGE = 1;
+
 function formatDateTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '-';
@@ -36,6 +48,23 @@ function toSafeImageUrl(value: string | null): string | null {
   }
 }
 
+function toListImageUrl(value: string | null): string | null {
+  const safeUrl = toSafeImageUrl(value);
+  if (!safeUrl) return null;
+  try {
+    const url = new URL(safeUrl);
+    if (!url.searchParams.has('w')) {
+      url.searchParams.set('w', '96');
+    }
+    if (!url.searchParams.has('q')) {
+      url.searchParams.set('q', '70');
+    }
+    return url.toString();
+  } catch {
+    return safeUrl;
+  }
+}
+
 export default function InventoryPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -51,10 +80,18 @@ export default function InventoryPage() {
   const defaultQ = searchParams.get('q') ?? '';
   const defaultCategoryId = searchParams.get('categoryId') ?? '';
   const defaultLocationId = searchParams.get('locationId') ?? '';
+  const defaultPage = Number.parseInt(searchParams.get('page') ?? `${DEFAULT_PAGE}`, 10);
+  const page = Number.isFinite(defaultPage) && defaultPage > 0 ? defaultPage : DEFAULT_PAGE;
 
   const [q, setQ] = useState(defaultQ);
   const [categoryId, setCategoryId] = useState(defaultCategoryId);
   const [locationId, setLocationId] = useState(defaultLocationId);
+  const [pagination, setPagination] = useState<InventoryListResponse['pagination']>({
+    page,
+    pageSize: 20,
+    totalItems: 0,
+    totalPages: 1,
+  });
 
   useEffect(() => {
     setQ(defaultQ);
@@ -67,8 +104,9 @@ export default function InventoryPage() {
     if (defaultQ.trim()) params.set('q', defaultQ.trim());
     if (defaultCategoryId) params.set('categoryId', defaultCategoryId);
     if (defaultLocationId) params.set('locationId', defaultLocationId);
+    if (page > DEFAULT_PAGE) params.set('page', `${page}`);
     return params.toString();
-  }, [defaultQ, defaultCategoryId, defaultLocationId]);
+  }, [defaultQ, defaultCategoryId, defaultLocationId, page]);
 
   useEffect(() => {
     let active = true;
@@ -132,7 +170,11 @@ export default function InventoryPage() {
           throw new Error('failed to fetch items');
         }
 
-        setItems((await response.json()) as InventoryListItem[]);
+        const payload = (await response.json()) as InventoryListResponse;
+        setItems(payload.items ?? []);
+        if (payload.pagination) {
+          setPagination(payload.pagination);
+        }
       } catch {
         setError('在庫一覧の取得に失敗しました。');
       } finally {
@@ -198,6 +240,17 @@ export default function InventoryPage() {
     if (categoryId) params.set('categoryId', categoryId);
     if (locationId) params.set('locationId', locationId);
 
+    const next = params.toString();
+    router.push(next ? `${pathname}?${next}` : pathname);
+  };
+
+  const movePage = (nextPage: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextPage <= DEFAULT_PAGE) {
+      params.delete('page');
+    } else {
+      params.set('page', `${nextPage}`);
+    }
     const next = params.toString();
     router.push(next ? `${pathname}?${next}` : pathname);
   };
@@ -302,7 +355,7 @@ export default function InventoryPage() {
         <>
           <div className="space-y-3 md:hidden">
             {items.map((item) => {
-              const imageUrl = toSafeImageUrl(item.imageUrl);
+              const imageUrl = toListImageUrl(item.imageUrl);
               return (
                 <article
                   key={item.id}
@@ -314,6 +367,9 @@ export default function InventoryPage() {
                         src={imageUrl}
                         alt={item.name}
                         loading="lazy"
+                        decoding="async"
+                        width={56}
+                        height={56}
                         className="h-14 w-14 shrink-0 rounded object-cover"
                         referrerPolicy="no-referrer"
                       />
@@ -395,7 +451,7 @@ export default function InventoryPage() {
               </thead>
               <tbody>
                 {items.map((item) => {
-                  const imageUrl = toSafeImageUrl(item.imageUrl);
+                  const imageUrl = toListImageUrl(item.imageUrl);
                   return (
                     <tr key={item.id} className="border-t border-brand-border">
                       <td className="px-3 py-2">
@@ -404,6 +460,9 @@ export default function InventoryPage() {
                             src={imageUrl}
                             alt={item.name}
                             loading="lazy"
+                            decoding="async"
+                            width={48}
+                            height={48}
                             className="h-12 w-12 rounded object-cover"
                             referrerPolicy="no-referrer"
                           />
@@ -462,6 +521,34 @@ export default function InventoryPage() {
                 })}
               </tbody>
             </table>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 text-sm text-brand-text">
+            <p>
+              {pagination.totalItems}件中 {(pagination.page - 1) * pagination.pageSize + 1}-
+              {Math.min(pagination.page * pagination.pageSize, pagination.totalItems)}件を表示
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={pagination.page <= 1}
+                onClick={() => movePage(pagination.page - 1)}
+                className="rounded border border-brand-border px-3 py-1.5 disabled:opacity-50"
+              >
+                前へ
+              </button>
+              <span>
+                {pagination.page} / {pagination.totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={pagination.page >= pagination.totalPages}
+                onClick={() => movePage(pagination.page + 1)}
+                className="rounded border border-brand-border px-3 py-1.5 disabled:opacity-50"
+              >
+                次へ
+              </button>
+            </div>
           </div>
         </>
       )}
