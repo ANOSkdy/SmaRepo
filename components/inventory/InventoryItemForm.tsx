@@ -147,21 +147,24 @@ export function InventoryItemForm({
   };
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4 rounded-lg border border-brand-border bg-brand-surface p-4">
+    <form
+      onSubmit={onSubmit}
+      className="space-y-4 rounded-lg border border-brand-border bg-brand-surface p-4 pb-[calc(var(--safe-area-bottom)+6.5rem)]"
+    >
       <div className="grid gap-4 md:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm text-brand-text">
           品目コード
-          <input className="rounded border border-brand-border px-3 py-2" value={value.sku} onChange={(e) => setValue({ ...value, sku: e.target.value })} required />
+          <input className="w-full rounded border border-brand-border px-3 py-2" value={value.sku} onChange={(e) => setValue({ ...value, sku: e.target.value })} required />
         </label>
 
         <label className="flex flex-col gap-1 text-sm text-brand-text">
           品目名
-          <input className="rounded border border-brand-border px-3 py-2" value={value.name} onChange={(e) => setValue({ ...value, name: e.target.value })} required />
+          <input className="w-full rounded border border-brand-border px-3 py-2" value={value.name} onChange={(e) => setValue({ ...value, name: e.target.value })} required />
         </label>
 
         <label className="flex flex-col gap-1 text-sm text-brand-text">
           カテゴリ
-          <select className="rounded border border-brand-border px-3 py-2" value={value.categoryId} onChange={(e) => setValue({ ...value, categoryId: e.target.value })} required>
+          <select className="w-full rounded border border-brand-border px-3 py-2" value={value.categoryId} onChange={(e) => setValue({ ...value, categoryId: e.target.value })} required>
             <option value="">カテゴリを選択</option>
             {categories
               .filter((x) => x.isActive)
@@ -175,7 +178,7 @@ export function InventoryItemForm({
 
         <label className="flex flex-col gap-1 text-sm text-brand-text">
           保管場所
-          <select className="rounded border border-brand-border px-3 py-2" value={value.locationId} onChange={(e) => setValue({ ...value, locationId: e.target.value })} required>
+          <select className="w-full rounded border border-brand-border px-3 py-2" value={value.locationId} onChange={(e) => setValue({ ...value, locationId: e.target.value })} required>
             <option value="">保管場所を選択</option>
             {locations
               .filter((x) => x.isActive)
@@ -189,17 +192,17 @@ export function InventoryItemForm({
 
         <label className="flex flex-col gap-1 text-sm text-brand-text">
           数量
-          <input className="rounded border border-brand-border px-3 py-2" type="number" min={0} value={value.quantity} onChange={(e) => setValue({ ...value, quantity: Number(e.target.value) })} required />
+          <input className="w-full rounded border border-brand-border px-3 py-2" type="number" min={0} value={value.quantity} onChange={(e) => setValue({ ...value, quantity: Number(e.target.value) })} required />
         </label>
 
         <label className="flex flex-col gap-1 text-sm text-brand-text">
           単位
-          <input className="rounded border border-brand-border px-3 py-2" value={value.unit} onChange={(e) => setValue({ ...value, unit: e.target.value })} />
+          <input className="w-full rounded border border-brand-border px-3 py-2" value={value.unit} onChange={(e) => setValue({ ...value, unit: e.target.value })} />
         </label>
 
         <label className="flex flex-col gap-1 text-sm text-brand-text">
           ステータス
-          <select className="rounded border border-brand-border px-3 py-2" value={value.status} onChange={(e) => setValue({ ...value, status: e.target.value as 'active' | 'inactive' })}>
+          <select className="w-full rounded border border-brand-border px-3 py-2" value={value.status} onChange={(e) => setValue({ ...value, status: e.target.value as 'active' | 'inactive' })}>
             <option value="active">有効</option>
             <option value="inactive">無効</option>
           </select>
@@ -207,7 +210,7 @@ export function InventoryItemForm({
 
         <label className="flex flex-col gap-1 text-sm text-brand-text">
           画像
-          <input className="rounded border border-brand-border px-3 py-2" type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => onUpload(e.target.files?.[0] ?? null)} />
+          <input className="w-full rounded border border-brand-border px-3 py-2" type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => onUpload(e.target.files?.[0] ?? null)} />
         </label>
       </div>
 
@@ -226,7 +229,7 @@ export function InventoryItemForm({
       ) : null}
 
       <div
-        className="sticky bottom-0 -mx-4 flex justify-between gap-3 border-t border-brand-border bg-brand-surface px-4 pt-3"
+        className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 border-t border-brand-border bg-brand-surface pt-3"
         style={{ paddingBottom: 'calc(var(--safe-area-bottom) + 0.75rem)' }}
       >
         {mode === 'edit' ? (
