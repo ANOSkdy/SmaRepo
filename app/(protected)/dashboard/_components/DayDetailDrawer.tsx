@@ -202,7 +202,8 @@ export default function DayDetailDrawer({ date, open, onClose }: DayDetailDrawer
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-10"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4"
+      style={{ paddingBottom: 'calc(var(--safe-area-bottom) + 2.5rem)' }}
       role="presentation"
       onClick={(event) => {
         if (event.target === event.currentTarget) {

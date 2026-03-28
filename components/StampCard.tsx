@@ -605,7 +605,7 @@ export default function StampCard({
 
   return (
     <section
-      className="flex min-h-[calc(100svh-72px)] w-full flex-col items-center gap-6 p-4 pb-[calc(env(safe-area-inset-bottom)+12px)]"
+      className="flex min-h-[calc(100svh-72px)] w-full flex-col items-center gap-6 p-4 pb-[calc(var(--safe-area-bottom)+12px)]"
       aria-live="polite"
     >
       {warning ? (

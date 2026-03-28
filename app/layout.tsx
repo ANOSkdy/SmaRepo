@@ -25,7 +25,7 @@ export default function RootLayout({
           </div>
         </header>
         <NextAuthSessionProvider>
-          <main id="main" role="main" className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-12 pt-6 sm:px-6">
+          <main id="main" role="main" className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pt-6 sm:px-6" style={{ paddingBottom: 'calc(var(--safe-area-bottom) + 3rem)' }}>
             {children}
           </main>
         </NextAuthSessionProvider>
