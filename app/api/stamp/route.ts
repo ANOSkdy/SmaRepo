@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import { auth } from '@/lib/auth';
 import { getSql } from '@/lib/db/neon';
-import { handleSessionAfterLogInsert } from '@/lib/services/sessions';
+import { handleSessionAfterLogInsertOrThrow } from '@/lib/services/sessions';
 import { resolveNearestActiveSiteDecision } from '@/lib/stamp/gpsNearest';
 import { resolveWorkTypeId } from '@/lib/stamp/resolveWorkTypeId';
 
@@ -261,6 +261,32 @@ function toNullableUuid(v: string | null): string | null {
   return Uuid.safeParse(v).success ? v : null;
 }
 
+async function runSessionMaintenanceWithSingleRetry(params: {
+  logId: string;
+  requestId: string;
+  userId: string;
+  workDate: string;
+}): Promise<void> {
+  try {
+    await handleSessionAfterLogInsertOrThrow(params.logId, {
+      requestId: params.requestId,
+    });
+  } catch (error1) {
+    console.warn({
+      level: 'warn',
+      event: 'stamp-session-maintenance-retry',
+      requestId: params.requestId,
+      logId: params.logId,
+      userId: params.userId,
+      workDate: params.workDate,
+      error: error1,
+    });
+    await handleSessionAfterLogInsertOrThrow(params.logId, {
+      requestId: params.requestId,
+    });
+  }
+}
+
 export async function POST(req: Request) {
   const requestId =
     globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2);
@@ -397,9 +423,32 @@ export async function POST(req: Request) {
 
     const insertedLogId = (rows?.[0] as { id?: unknown } | undefined)?.id;
     if (typeof insertedLogId === 'string' && insertedLogId.length > 0) {
-      queueMicrotask(() => {
-        void handleSessionAfterLogInsert(insertedLogId);
-      });
+      try {
+        await runSessionMaintenanceWithSingleRetry({
+          logId: insertedLogId,
+          requestId,
+          userId,
+          workDate,
+        });
+      } catch (sessionError) {
+        console.error({
+          level: 'error',
+          event: 'stamp-session-maintenance-failed',
+          requestId,
+          logId: insertedLogId,
+          userId,
+          workDate,
+          error: sessionError,
+        });
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'Stamp recorded but calendar reflection failed',
+            requestId,
+          },
+          { status: 503 }
+        );
+      }
     }
 
     return NextResponse.json(

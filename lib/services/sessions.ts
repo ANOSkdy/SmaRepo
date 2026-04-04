@@ -18,11 +18,12 @@ type SessionLog = {
 type OpenSession = {
   id: string;
   startAtIso: string;
+  workDate: string | null;
 };
 
 type SessionRepository = {
   getLogById: (logId: string) => Promise<SessionLog | null>;
-  findLatestOpenSessionByUser: (userId: string) => Promise<OpenSession | null>;
+  findLatestOpenSessionByUser: (params: { userId: string; workDate?: string }) => Promise<OpenSession | null>;
   insertOpenSession: (log: SessionLog) => Promise<void>;
   closeOpenSession: (params: {
     sessionId: string;
@@ -105,24 +106,26 @@ const defaultRepository: SessionRepository = {
     return normalizeLog(payload);
   },
 
-  async findLatestOpenSessionByUser(userId) {
+  async findLatestOpenSessionByUser({ userId, workDate }) {
     const { query } = await import('@/lib/db');
-    const result = await query<{ id: string; start_at: string }>(
+    const result = await query<{ id: string; start_at: string; work_date: string | null }>(
       `
-        SELECT id, start_at
+        SELECT id, start_at, work_date::text as work_date
         FROM sessions
         WHERE user_id = $1::uuid
           AND status = 'open'
+          AND ($2::date IS NULL OR work_date = $2::date)
         ORDER BY start_at DESC
         LIMIT 1
       `,
-      [userId],
+      [userId, workDate ?? null],
     );
     const row = result.rows[0];
     if (!row) return null;
     return {
       id: row.id,
       startAtIso: row.start_at,
+      workDate: row.work_date,
     };
   },
 
@@ -236,13 +239,24 @@ export function createSessionMaintenanceService(params?: {
   const logger = params?.logger ?? console;
 
   async function openSessionFromInLog(log: SessionLog): Promise<void> {
-    const existing = await repo.findLatestOpenSessionByUser(log.userId);
+    const existing = await repo.findLatestOpenSessionByUser({
+      userId: log.userId,
+      workDate: log.workDate,
+    });
     if (existing) return;
     await repo.insertOpenSession(log);
   }
 
   async function closeSessionFromOutLog(log: SessionLog): Promise<void> {
-    const open = await repo.findLatestOpenSessionByUser(log.userId);
+    const openForWorkDate = await repo.findLatestOpenSessionByUser({
+      userId: log.userId,
+      workDate: log.workDate,
+    });
+    const open =
+      openForWorkDate ??
+      (await repo.findLatestOpenSessionByUser({
+        userId: log.userId,
+      }));
     if (!open) {
       logger.warn({
         event: 'session-close-skipped-no-open-session',
@@ -282,22 +296,34 @@ export function createSessionMaintenanceService(params?: {
     });
   }
 
-  async function handleSessionAfterLogInsert(logId: string): Promise<void> {
+  async function handleSessionAfterLogInsertOrThrow(logId: string, context?: { requestId?: string }): Promise<void> {
     if (!logId) return;
 
+    const log = await repo.getLogById(logId);
+    if (!log) {
+      logger.warn({
+        event: 'session-maintenance-log-not-found',
+        logId,
+        requestId: context?.requestId ?? null,
+      });
+      return;
+    }
+
+    if (log.stampType === 'IN') {
+      await openSessionFromInLog(log);
+      return;
+    }
+
+    await closeSessionFromOutLog(log);
+  }
+
+  async function handleSessionAfterLogInsert(logId: string, context?: { requestId?: string }): Promise<void> {
     try {
-      const log = await repo.getLogById(logId);
-      if (!log) return;
-
-      if (log.stampType === 'IN') {
-        await openSessionFromInLog(log);
-        return;
-      }
-
-      await closeSessionFromOutLog(log);
+      await handleSessionAfterLogInsertOrThrow(logId, context);
     } catch (error) {
       logger.error({
         event: 'session-maintenance-failed',
+        requestId: context?.requestId ?? null,
         logId,
         error,
       });
@@ -321,6 +347,7 @@ export function createSessionMaintenanceService(params?: {
 
   return {
     handleSessionAfterLogInsert,
+    handleSessionAfterLogInsertOrThrow,
     openSessionFromInLog,
     closeSessionFromOutLog,
     forceCloseOpenSessionsByWorkDate,
@@ -330,4 +357,5 @@ export function createSessionMaintenanceService(params?: {
 const defaultService = createSessionMaintenanceService();
 
 export const handleSessionAfterLogInsert = defaultService.handleSessionAfterLogInsert;
+export const handleSessionAfterLogInsertOrThrow = defaultService.handleSessionAfterLogInsertOrThrow;
 export const forceCloseOpenSessionsByWorkDate = defaultService.forceCloseOpenSessionsByWorkDate;
