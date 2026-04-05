@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import type { InventoryCategory, InventoryLocation } from '@/types/inventory';
+import type { InventoryCategory, InventoryItemsListResponse, InventoryLocation } from '@/types/inventory';
 
 type InventoryListItem = {
   id: string;
@@ -16,6 +16,10 @@ type InventoryListItem = {
   categoryName: string;
   locationName: string;
 };
+
+const DEFAULT_PAGE = 1;
+const DEFAULT_PER_PAGE = 20;
+const ALLOWED_PER_PAGE = new Set([20, 50, 100]);
 
 function formatDateTime(value: string) {
   const date = new Date(value);
@@ -36,6 +40,18 @@ function toSafeImageUrl(value: string | null): string | null {
   }
 }
 
+function parsePage(value: string | null): number {
+  const parsed = Number.parseInt(value ?? '', 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_PAGE;
+  return parsed;
+}
+
+function parsePerPage(value: string | null): number {
+  const parsed = Number.parseInt(value ?? '', 10);
+  if (!Number.isFinite(parsed) || !ALLOWED_PER_PAGE.has(parsed)) return DEFAULT_PER_PAGE;
+  return parsed;
+}
+
 export default function InventoryPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -47,10 +63,18 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [pendingId, setPendingId] = useState<string>('');
+  const [pageInfo, setPageInfo] = useState({
+    page: DEFAULT_PAGE,
+    perPage: DEFAULT_PER_PAGE,
+    total: 0,
+    totalPages: 1,
+  });
 
   const defaultQ = searchParams.get('q') ?? '';
   const defaultCategoryId = searchParams.get('categoryId') ?? '';
   const defaultLocationId = searchParams.get('locationId') ?? '';
+  const defaultPage = parsePage(searchParams.get('page'));
+  const defaultPerPage = parsePerPage(searchParams.get('perPage'));
 
   const [q, setQ] = useState(defaultQ);
   const [categoryId, setCategoryId] = useState(defaultCategoryId);
@@ -67,8 +91,10 @@ export default function InventoryPage() {
     if (defaultQ.trim()) params.set('q', defaultQ.trim());
     if (defaultCategoryId) params.set('categoryId', defaultCategoryId);
     if (defaultLocationId) params.set('locationId', defaultLocationId);
+    if (defaultPage > 1) params.set('page', String(defaultPage));
+    if (defaultPerPage !== DEFAULT_PER_PAGE) params.set('perPage', String(defaultPerPage));
     return params.toString();
-  }, [defaultQ, defaultCategoryId, defaultLocationId]);
+  }, [defaultQ, defaultCategoryId, defaultLocationId, defaultPage, defaultPerPage]);
 
   useEffect(() => {
     let active = true;
@@ -132,7 +158,25 @@ export default function InventoryPage() {
           throw new Error('failed to fetch items');
         }
 
-        setItems((await response.json()) as InventoryListItem[]);
+        const data = (await response.json()) as InventoryItemsListResponse;
+        setItems(data.items);
+        setPageInfo({
+          page: data.page,
+          perPage: data.perPage,
+          total: data.total,
+          totalPages: data.totalPages,
+        });
+
+        if (data.page > data.totalPages) {
+          const params = new URLSearchParams(searchParams.toString());
+          if (data.totalPages <= 1) {
+            params.delete('page');
+          } else {
+            params.set('page', String(data.totalPages));
+          }
+          const next = params.toString();
+          router.replace(next ? `${pathname}?${next}` : pathname);
+        }
       } catch {
         setError('在庫一覧の取得に失敗しました。');
       } finally {
@@ -141,7 +185,7 @@ export default function InventoryPage() {
         }
       }
     },
-    [queryString]
+    [pathname, queryString, router, searchParams]
   );
 
   useEffect(() => {
@@ -197,10 +241,77 @@ export default function InventoryPage() {
     if (q.trim()) params.set('q', q.trim());
     if (categoryId) params.set('categoryId', categoryId);
     if (locationId) params.set('locationId', locationId);
+    if (defaultPerPage !== DEFAULT_PER_PAGE) params.set('perPage', String(defaultPerPage));
 
     const next = params.toString();
     router.push(next ? `${pathname}?${next}` : pathname);
   };
+
+  const onChangePage = (nextPage: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextPage <= 1) {
+      params.delete('page');
+    } else {
+      params.set('page', String(nextPage));
+    }
+    const next = params.toString();
+    router.push(next ? `${pathname}?${next}` : pathname);
+  };
+
+  const onChangePerPage = (value: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === DEFAULT_PER_PAGE) {
+      params.delete('perPage');
+    } else {
+      params.set('perPage', String(value));
+    }
+    params.delete('page');
+    const next = params.toString();
+    router.push(next ? `${pathname}?${next}` : pathname);
+  };
+
+  const renderPagination = (className: string, suffix: string) => (
+    <div className={className}>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand-border bg-brand-surface p-3 text-sm text-brand-text">
+        <p>
+          全{pageInfo.total}件 / {pageInfo.page} / {Math.max(1, pageInfo.totalPages)}ページ
+        </p>
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-brand-muted" htmlFor={`per-page-${suffix}`}>
+            表示件数
+          </label>
+          <select
+            id={`per-page-${suffix}`}
+            value={pageInfo.perPage}
+            onChange={(event) => onChangePerPage(Number(event.currentTarget.value))}
+            className="rounded border border-brand-border bg-brand-surface px-2 py-1 text-xs text-brand-text focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
+          >
+            {[20, 50, 100].map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => onChangePage(pageInfo.page - 1)}
+            disabled={pageInfo.page <= 1}
+            className="rounded border border-brand-border px-3 py-1.5 text-xs disabled:opacity-50"
+          >
+            前へ
+          </button>
+          <button
+            type="button"
+            onClick={() => onChangePage(pageInfo.page + 1)}
+            disabled={pageInfo.page >= pageInfo.totalPages}
+            className="rounded border border-brand-border px-3 py-1.5 text-xs disabled:opacity-50"
+          >
+            次へ
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -377,6 +488,7 @@ export default function InventoryPage() {
               );
             })}
           </div>
+          {renderPagination('md:hidden', 'mobile')}
 
           <div className="hidden overflow-x-auto rounded-lg border border-brand-border bg-brand-surface md:block">
             <table className="min-w-full text-sm">
@@ -463,6 +575,7 @@ export default function InventoryPage() {
               </tbody>
             </table>
           </div>
+          {renderPagination('hidden md:block', 'desktop')}
         </>
       )}
     </div>

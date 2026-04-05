@@ -3,9 +3,12 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { inventoryQuery } from '@/lib/inventory/db';
 import { inventoryItemCreateSchema, normalizeNullableText } from '@/lib/inventory/schemas';
-import type { InventoryItemListEntry } from '@/types/inventory';
+import type { InventoryItemListEntry, InventoryItemsListResponse } from '@/types/inventory';
 
 export const runtime = 'nodejs';
+const DEFAULT_PAGE = 1;
+const DEFAULT_PER_PAGE = 20;
+const ALLOWED_PER_PAGE = new Set([20, 50, 100]);
 
 type InventoryItemListRow = {
   id: string;
@@ -58,6 +61,20 @@ function toSafeDbError(error: unknown): DbError {
   };
 }
 
+function normalizePage(value: string | null): number {
+  const parsed = Number.parseInt(value ?? '', 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_PAGE;
+  return parsed;
+}
+
+function normalizePerPage(value: string | null): number {
+  const parsed = Number.parseInt(value ?? '', 10);
+  if (!Number.isFinite(parsed) || !ALLOWED_PER_PAGE.has(parsed)) {
+    return DEFAULT_PER_PAGE;
+  }
+  return parsed;
+}
+
 export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user) {
@@ -68,6 +85,8 @@ export async function GET(request: Request) {
   const q = (url.searchParams.get('q') ?? '').trim();
   const categoryId = (url.searchParams.get('categoryId') ?? '').trim();
   const locationId = url.searchParams.get('locationId') ?? '';
+  const page = normalizePage(url.searchParams.get('page'));
+  const perPage = normalizePerPage(url.searchParams.get('perPage'));
 
   const params: unknown[] = [];
   let whereClause = 'WHERE i.is_active = TRUE';
@@ -88,6 +107,19 @@ export async function GET(request: Request) {
   }
 
   try {
+    const countResult = await inventoryQuery<{ total: string }>(
+      `
+        SELECT COUNT(*)::text AS total
+        FROM inventory.items i
+        ${whereClause}
+      `,
+      params,
+    );
+
+    const total = Number.parseInt(countResult.rows[0]?.total ?? '0', 10) || 0;
+    const totalPages = Math.max(1, Math.ceil(total / perPage));
+    const offset = (page - 1) * perPage;
+
     const result = await inventoryQuery<InventoryItemListRow>(
       `
         WITH machine_rows AS (
@@ -127,12 +159,20 @@ export async function GET(request: Request) {
         LEFT JOIN machine_rows m ON m.machine_code = i.category_id
         JOIN inventory.locations l ON l.id = i.location_id
         ${whereClause}
-        ORDER BY i.name ASC
+        ORDER BY i.name ASC, i.id ASC
+        LIMIT $${params.length + 1}
+        OFFSET $${params.length + 2}
       `,
-      params,
+      [...params, perPage, offset],
     );
 
-    return NextResponse.json(result.rows as InventoryItemListEntry[]);
+    return NextResponse.json<InventoryItemsListResponse>({
+      items: result.rows as InventoryItemListEntry[],
+      page,
+      perPage,
+      total,
+      totalPages,
+    });
   } catch {
     return NextResponse.json({ error: 'DB_QUERY_FAILED' }, { status: 500 });
   }
