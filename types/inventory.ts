@@ -41,3 +41,11 @@ export interface InventoryItemListEntry extends InventoryItem {
   categoryName: string;
   locationName: string;
 }
+
+export interface InventoryItemsListResponse {
+  items: InventoryItemListEntry[];
+  page: number;
+  perPage: number;
+  total: number;
+  totalPages: number;
+}
